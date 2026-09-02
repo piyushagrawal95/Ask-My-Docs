@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+pydantic-settings
+python-dotenv
+supabase
+email-validator
+pypdf
+python-docx
+langchain-text-splitters
+sentence-transformers
+pytest
+pytest-mock
+httpx

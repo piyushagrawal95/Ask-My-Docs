@@ -1,0 +1,227 @@
+{
+  "description": "Ground-truth evaluation set for Ask My Docs RAG pipeline. Covers retrieval accuracy, answer correctness, citation accuracy, and hallucination/refusal behavior. Two fixture documents are used: a RAG technical reference (RAG_Test_Document_Large.pdf) and an unrelated Salesforce interview-prep guide (Salesforce_Admin_Interview_Prep.pdf) — the mismatch in topic is intentional, so cross-document confusion can be detected.",
+  "fixture_documents": [
+    "RAG_Test_Document_Large.pdf",
+    "Salesforce_Admin_Interview_Prep.pdf"
+  ],
+  "cases": [
+    {
+      "id": "rag_01",
+      "question": "What are the two search techniques combined in hybrid search?",
+      "is_answerable": true,
+      "source_document": "RAG_Test_Document_Large.pdf",
+      "source_page": 14,
+      "expected_answer": "BM25 keyword search and vector (semantic) search, combined typically via Reciprocal Rank Fusion.",
+      "expected_keywords": ["BM25", "vector"]
+    },
+    {
+      "id": "rag_02",
+      "question": "What formula does Reciprocal Rank Fusion use to score a document?",
+      "is_answerable": true,
+      "source_document": "RAG_Test_Document_Large.pdf",
+      "source_page": 16,
+      "expected_answer": "score(d) = sum(1 / (k + rank(d))) across the retrieval systems.",
+      "expected_keywords": ["1 / (k", "rank(d)"]
+    },
+    {
+      "id": "rag_03",
+      "question": "Which two vector index types are mentioned for pgvector?",
+      "is_answerable": true,
+      "source_document": "RAG_Test_Document_Large.pdf",
+      "source_page": 10,
+      "expected_answer": "IVFFlat and HNSW.",
+      "expected_keywords": ["IVFFlat", "HNSW"]
+    },
+    {
+      "id": "rag_04",
+      "question": "What embedding model is referenced in the appendix test data?",
+      "is_answerable": true,
+      "source_document": "RAG_Test_Document_Large.pdf",
+      "source_page": 42,
+      "expected_answer": "all-MiniLM-L6-v2",
+      "expected_keywords": ["all-MiniLM-L6-v2"]
+    },
+    {
+      "id": "rag_05",
+      "question": "What error code is shown in the appendix test data table?",
+      "is_answerable": true,
+      "source_document": "RAG_Test_Document_Large.pdf",
+      "source_page": 42,
+      "expected_answer": "ERR_VECTOR_TIMEOUT_504",
+      "expected_keywords": ["ERR_VECTOR_TIMEOUT_504"]
+    },
+    {
+      "id": "rag_06",
+      "question": "What Python caching mechanism is mentioned for reusing loaded embedding/reranker models?",
+      "is_answerable": true,
+      "source_document": "RAG_Test_Document_Large.pdf",
+      "source_page": 36,
+      "expected_answer": "Python's lru_cache for process-level caching.",
+      "expected_keywords": ["lru_cache"]
+    },
+    {
+      "id": "rag_07",
+      "question": "Roughly how many candidates does the first-stage retrieval return before reranking, according to the document?",
+      "is_answerable": true,
+      "source_document": "RAG_Test_Document_Large.pdf",
+      "source_page": 18,
+      "expected_answer": "30 or 50 candidates cheaply retrieved in the first stage, narrowed to 5-10 after reranking.",
+      "expected_keywords": ["30", "50"]
+    },
+    {
+      "id": "rag_08",
+      "question": "Name two retrieval evaluation metrics mentioned in the Evaluation section.",
+      "is_answerable": true,
+      "source_document": "RAG_Test_Document_Large.pdf",
+      "source_page": 40,
+      "expected_answer": "recall@k, precision@k, and mean reciprocal rank (MRR).",
+      "expected_keywords": ["recall@k", "precision@k"]
+    },
+    {
+      "id": "rag_09",
+      "question": "What chunk overlap percentage is set in the configuration shown in the appendix?",
+      "is_answerable": true,
+      "source_document": "RAG_Test_Document_Large.pdf",
+      "source_page": 42,
+      "expected_answer": "CHUNK_OVERLAP_PERCENT=10, i.e. 10%.",
+      "expected_keywords": ["10"]
+    },
+    {
+      "id": "rag_10",
+      "question": "According to the document, how should the generation layer behave when the retrieved context does not contain enough information to answer?",
+      "is_answerable": true,
+      "source_document": "RAG_Test_Document_Large.pdf",
+      "source_page": 26,
+      "expected_answer": "It should distinguish evidence from assumptions and refuse/abstain from making unsupported claims rather than guessing.",
+      "expected_keywords": ["refuse", "unsupported"]
+    },
+    {
+      "id": "sf_01",
+      "question": "What does OWD stand for and what are its main access-level options?",
+      "is_answerable": true,
+      "source_document": "Salesforce_Admin_Interview_Prep.pdf",
+      "source_page": 6,
+      "expected_answer": "Organization-Wide Defaults; options are Private, Public Read Only, and Public Read/Write.",
+      "expected_keywords": ["Private", "Public Read"]
+    },
+    {
+      "id": "sf_02",
+      "question": "What suffix do custom objects always carry in Salesforce?",
+      "is_answerable": true,
+      "source_document": "Salesforce_Admin_Interview_Prep.pdf",
+      "source_page": 4,
+      "expected_answer": "__c",
+      "expected_keywords": ["__c"]
+    },
+    {
+      "id": "sf_03",
+      "question": "How is a many-to-many relationship implemented in Salesforce?",
+      "is_answerable": true,
+      "source_document": "Salesforce_Admin_Interview_Prep.pdf",
+      "source_page": 5,
+      "expected_answer": "Via a Junction Object that has two Master-Detail (or Lookup) relationships to the two objects being connected.",
+      "expected_keywords": ["Junction", "Master-Detail"]
+    },
+    {
+      "id": "sf_04",
+      "question": "What is the maximum number of records Data Loader can handle?",
+      "is_answerable": true,
+      "source_document": "Salesforce_Admin_Interview_Prep.pdf",
+      "source_page": 10,
+      "expected_answer": "Up to 5 million records.",
+      "expected_keywords": ["5 million"]
+    },
+    {
+      "id": "sf_05",
+      "question": "What is the storage limit of a Developer sandbox?",
+      "is_answerable": true,
+      "source_document": "Salesforce_Admin_Interview_Prep.pdf",
+      "source_page": 14,
+      "expected_answer": "200 MB.",
+      "expected_keywords": ["200 MB"]
+    },
+    {
+      "id": "sf_06",
+      "question": "Which four Flow types are listed under Salesforce automation tools?",
+      "is_answerable": true,
+      "source_document": "Salesforce_Admin_Interview_Prep.pdf",
+      "source_page": 8,
+      "expected_answer": "Screen Flow, Record-Triggered Flow, Autolaunched Flow, and Scheduled Flow.",
+      "expected_keywords": ["Screen Flow", "Record-Triggered", "Autolaunched", "Scheduled"]
+    },
+    {
+      "id": "sf_07",
+      "question": "What happens to child records when the parent is deleted in a Master-Detail relationship, compared to a Lookup relationship?",
+      "is_answerable": true,
+      "source_document": "Salesforce_Admin_Interview_Prep.pdf",
+      "source_page": 4,
+      "expected_answer": "In Master-Detail, deleting the parent cascades and deletes all children. In Lookup, the child can exist independently and is not automatically deleted.",
+      "expected_keywords": ["cascade", "Lookup"]
+    },
+    {
+      "id": "sf_08",
+      "question": "What tool does Salesforce provide to visually view and build objects and their relationships?",
+      "is_answerable": true,
+      "source_document": "Salesforce_Admin_Interview_Prep.pdf",
+      "source_page": 5,
+      "expected_answer": "Schema Builder.",
+      "expected_keywords": ["Schema Builder"]
+    },
+    {
+      "id": "unanswerable_01",
+      "question": "What is the monthly subscription price of Salesforce Sales Cloud?",
+      "is_answerable": false,
+      "source_document": null,
+      "source_page": null,
+      "expected_answer": "Not present in either document — pricing is never mentioned.",
+      "expected_keywords": []
+    },
+    {
+      "id": "unanswerable_02",
+      "question": "Which cloud provider hosts the Supabase instance used in this project?",
+      "is_answerable": false,
+      "source_document": null,
+      "source_page": null,
+      "expected_answer": "Not present in either document — hosting provider is never mentioned.",
+      "expected_keywords": []
+    },
+    {
+      "id": "unanswerable_03",
+      "question": "What accuracy score did the cross-encoder reranker achieve in this project's own benchmarks?",
+      "is_answerable": false,
+      "source_document": null,
+      "source_page": null,
+      "expected_answer": "Not present — the document explains reranking conceptually but reports no benchmark scores.",
+      "expected_keywords": []
+    },
+    {
+      "id": "unanswerable_04",
+      "question": "Who is the current CEO of Salesforce according to this document?",
+      "is_answerable": false,
+      "source_document": null,
+      "source_page": null,
+      "expected_answer": "Not present in either document.",
+      "expected_keywords": []
+    },
+    {
+      "id": "scoping_01",
+      "question": "According to the Salesforce guide, what is a Junction Object used for?",
+      "is_answerable": true,
+      "source_document": "Salesforce_Admin_Interview_Prep.pdf",
+      "source_page": 5,
+      "expected_answer": "Implementing many-to-many relationships between two objects using two Master-Detail (or Lookup) relationships.",
+      "expected_keywords": ["Junction"],
+      "notes": "Use this case with document_ids restricted to only the RAG doc to confirm the system correctly returns is_answerable=false instead of pulling an unrelated answer from the wrong document."
+    },
+    {
+      "id": "scoping_02",
+      "question": "According to the RAG document, what are common vector index types for pgvector?",
+      "is_answerable": true,
+      "source_document": "RAG_Test_Document_Large.pdf",
+      "source_page": 10,
+      "expected_answer": "IVFFlat and HNSW.",
+      "expected_keywords": ["IVFFlat", "HNSW"],
+      "notes": "Use this case with document_ids restricted to only the Salesforce doc to confirm the system correctly returns is_answerable=false instead of pulling an unrelated answer from the wrong document."
+    }
+  ]
+}
