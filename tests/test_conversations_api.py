@@ -34,7 +34,7 @@ def test_create_conversation(mock_get_client, client):
     mock_client.table.return_value.insert.return_value.execute.return_value.data = [
         {
             "id": "conv-1",
-            "user_id": "11111111-1111-1111-1111-111111111111",
+            "owner_id": "11111111-1111-1111-1111-111111111111",
             "title": None,
             "created_at": "2026-01-01T00:00:00Z",
             "updated_at": "2026-01-01T00:00:00Z",
