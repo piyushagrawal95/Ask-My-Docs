@@ -9,6 +9,7 @@ python-docx
 langchain-text-splitters
 sentence-transformers
 python-multipart
+groq
 pytest
 pytest-mock
 httpx
