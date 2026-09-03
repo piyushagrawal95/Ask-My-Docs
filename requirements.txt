@@ -8,6 +8,7 @@ pypdf
 python-docx
 langchain-text-splitters
 sentence-transformers
+python-multipart
 pytest
 pytest-mock
 httpx
