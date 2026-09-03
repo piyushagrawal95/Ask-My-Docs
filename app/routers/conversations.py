@@ -18,7 +18,7 @@ def make_title_from_question(question:str,max_length:int =50) ->str:
     cleaned=question.strip().replace("\n"," ")
     if(len(cleaned)<=max_length):
         return cleaned
-    return cleaned[:max_length.split(" ",1)[0]]+ "..."
+    return cleaned[:max_length]+ "..."
 
 
 def _get_owned_conversation(client, conversation_id: str, user_id: str) -> dict:
@@ -162,7 +162,7 @@ async def ask_question(
 
         # 6. Auto-title the conversation from the first question
     if is_first_message:
-        title = imake_title_from_question(body.question)
+        title = make_title_from_question(body.question)
         client.table("conversations").update({"title": title}).eq(
             "id", conversation_id
         ).execute()
