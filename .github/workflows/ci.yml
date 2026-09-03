@@ -46,6 +46,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Debug secret length
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: |
+          echo "URL length: ${#SUPABASE_URL}"
+          echo "First 8 chars: ${SUPABASE_URL:0:8}"
+
       - name: Run RAG evaluation
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
