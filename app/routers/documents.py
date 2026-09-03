@@ -27,8 +27,18 @@ async def upload_document(
     if not file_bytes:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
+    client=get_service_client()
+    existing=(
+        client.table("documents").select("id","status").eq("owner_id",user.id).eq("file_name",file.filename).execute()
+    )
+    warning=None
+    if existing.data:
+        warning=(f"You already have a document named '{file.filename}'"
+                 f"({len(existing.data)} existing copy/copies).This will be uploaded as a new, separated document."
+        )
+
+
     # 3. documents table mein row banao (status = pending)
-    client = get_service_client()
     storage_path = f"{user.id}/{file.filename}"
 
     insert_resp = (
@@ -58,7 +68,7 @@ async def upload_document(
     #    processing background mein chalti rahegi)
     background_tasks.add_task(process_document, document["id"], file_bytes, file.filename)
 
-    return document
+    return {**document,"warning":warning}
 
 
 @router.get("")
@@ -104,3 +114,29 @@ async def delete_document(document_id: str, user: CurrentUser = Depends(get_curr
 
     client.table("documents").delete().eq("id", document_id).execute()
     return None
+
+
+@router.post("/{document_id}/reprocess",status_code=202)
+async def reprocess_document(
+    document_id:str,
+    background_tasks:BackgroundTasks,
+    user:CurrentUser=Depends(get_current_user),
+):
+    client=get_service_client()
+    resp=(client.table("documents").select("id,storage_path,file_name").eq("id",document_id).eq("owner_id",user.id).execute())
+    if not resp.data:
+        raise HTTPException(status_code=404,detail="Document not found")
+
+    document=resp.data[0]
+    # Redownload the original file from storage
+    try:
+        file_bytes=client.storage.from_("documents").download(document["storage_path"])
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Could not fetch stored file:{e}")
+
+    client.table("documents").update({
+        "status":"pending","error_message":None
+    }).eq("id",document_id).execute()
+
+    background_tasks.add_task(process_document,document_id,file_bytes,document["file_name"])
+    return {"id":document_id,"status":"pending","message":"Reprocessing started"}

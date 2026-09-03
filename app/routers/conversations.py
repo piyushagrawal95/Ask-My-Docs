@@ -162,7 +162,7 @@ async def ask_question(
 
         # 6. Auto-title the conversation from the first question
     if is_first_message:
-        title = make_title_from_question(body.question)
+        title = imake_title_from_question(body.question)
         client.table("conversations").update({"title": title}).eq(
             "id", conversation_id
         ).execute()
