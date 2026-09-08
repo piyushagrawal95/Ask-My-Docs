@@ -68,6 +68,27 @@ async def get_conversation(conversation_id: str, user: CurrentUser = Depends(get
     )
     return {"conversation": conversation, "messages": messages_resp.data}
 
+@router.delete("/{conversation_id}", status_code=204)
+async def delete_conversation(conversation_id: str, user: CurrentUser = Depends(get_current_user)):
+    client = get_service_client()
+    _get_owned_conversation(client, conversation_id, user.id)  # 404s + ownership check
+
+    # Clean up messages (and their citations) first, in case the DB doesn't
+    # have ON DELETE CASCADE set up on these foreign keys.
+    messages_resp = (
+        client.table("messages")
+        .select("id")
+        .eq("conversation_id", conversation_id)
+        .execute()
+    )
+    message_ids = [m["id"] for m in messages_resp.data]
+    if message_ids:
+        client.table("citations").delete().in_("message_id", message_ids).execute()
+        client.table("messages").delete().eq("conversation_id", conversation_id).execute()
+
+    client.table("conversations").delete().eq("id", conversation_id).execute()
+    return None
+
 
 @router.post("/{conversation_id}/messages", status_code=201, response_model=MessageResponse)
 async def ask_question(
@@ -127,7 +148,7 @@ async def ask_question(
         return {**assistant_row, "citations": []}
 
     # 3. Retrieve -> generate
-    chunks = retrieve(document_ids, body.question, top_k=5)
+    chunks = retrieve(document_ids, body.question)
     result = generate_answer(body.question, chunks)
 
     # 4. Save assistant message

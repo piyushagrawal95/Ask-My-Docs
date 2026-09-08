@@ -4,7 +4,7 @@ create extension if not exists vector
 create extension if not exists pg_trgm --optional, helps fuzzy text search
 
 --documents
-create table if not exists(documents)(
+create table if not exists documents(
     id uuid primary key default gen_random_uuid(),
     owner_id uuid not null references auth.users(id) on delete cascade,
     file_name text not null,
@@ -13,8 +13,8 @@ create table if not exists(documents)(
         check (status in('pending','processing','ready','failed')),
     error_message text,
     page_count int,
-    created at timestamptz not null default now(),
-    updated at timestamptz not null default now()
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
 );
 create index if not exists idx_documents_owner_id on documents(owner_id);
 create index if not exists idx_documents_status on documents(status);
@@ -28,10 +28,10 @@ create table if not exists document_chunks(
     page_number int,
     embedding vector(384),
     content_tsv tsvector generated always as (to_tsvector('english',content)) stored,
-    created at timestamptz not null default now()
+    created_at timestamptz not null default now()
 );
 
-create index if not exists idx_chunks_document_id on document_chunks(document_id);;
+create index if not exists idx_chunks_document_id on document_chunks(document_id);
 create index if not exists idx_chunks_embedding on document_chunks using hnsw(embedding vector_cosine_ops);
 create index if not exists idx_chunks_content_tsv on document_chunks using gin(content_tsv);
 
@@ -89,7 +89,9 @@ drop policy if exists "chunks via owned document" on document_chunks;
 create policy "chunks via owned document" on document_chunks
     for all using (
         document_id in (select id from documents where owner_id = auth.uid())
-    );drop policy if exists "messages via owned conversation" on messages;
+    );
+
+drop policy if exists "messages via owned conversation" on messages;
 create policy "messages via owned conversation" on messages
     for all using (
         conversation_id in (select id from conversations where owner_id = auth.uid())
@@ -143,4 +145,3 @@ language sql stable as $$
     order by rank desc
     limit p_match_count;
 $$;
-

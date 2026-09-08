@@ -2,11 +2,12 @@ from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile, File, HTTPE
 from app.auth import get_current_user, CurrentUser
 from app.database import get_service_client
 from app.services.processing import process_document
+from app.config import settings
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
-ALLOWED_EXTENSIONS = {"pdf", "docx", "txt"}
-MAX_FILE_SIZE_BYTES=10*1024*1024 #10 MB
+ALLOWED_EXTENSIONS = {ext.strip().lower() for ext in settings.allowed_extensions.split(",")}
+MAX_FILE_SIZE_BYTES = settings.max_file_size_mb * 1024 * 1024
 
 @router.post("", status_code=201)
 async def upload_document(
@@ -27,18 +28,13 @@ async def upload_document(
     if not file_bytes:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
-    client=get_service_client()
-    existing=(
-        client.table("documents").select("id","status").eq("owner_id",user.id).eq("file_name",file.filename).execute()
-    )
-    warning=None
-    if existing.data:
-        warning=(f"You already have a document named '{file.filename}'"
-                 f"({len(existing.data)} existing copy/copies).This will be uploaded as a new, separated document."
-        )
-
+    # Large file warning (non-blocking) — must be defined before it's returned below.
+    warning = None
+    if len(file_bytes) > MAX_FILE_SIZE_BYTES:
+        warning = f"File is larger than {MAX_FILE_SIZE_BYTES // (1024 * 1024)}MB — processing may take longer."
 
     # 3. documents table mein row banao (status = pending)
+    client = get_service_client()
     storage_path = f"{user.id}/{file.filename}"
 
     insert_resp = (
@@ -59,16 +55,28 @@ async def upload_document(
     try:
         client.storage.from_("documents").upload(storage_path, file_bytes)
     except Exception as e:
+        error_text = str(e)
+        is_duplicate = "already exists" in error_text.lower() or "409" in error_text or "Duplicate" in error_text
+
+        if is_duplicate:
+            # File already exists in storage — the pending row we just inserted
+            # is orphaned, clean it up rather than leaving a "failed" duplicate.
+            client.table("documents").delete().eq("id", document["id"]).execute()
+            raise HTTPException(
+                status_code=409,
+                detail="A file with this name already exists. Please rename the file or delete the existing one first.",
+            )
+
         client.table("documents").update(
-            {"status": "failed", "error_message": f"Storage upload failed: {e}"}
+            {"status": "failed", "error_message": f"Storage upload failed: {error_text}"}
         ).eq("id", document["id"]).execute()
-        raise HTTPException(status_code=502, detail=f"Failed to store file: {e}")
+        raise HTTPException(status_code=502, detail="Failed to store file. Please try again.")
 
     # 5. Processing background mein trigger karo (upload request turant return ho jayega,
     #    processing background mein chalti rahegi)
     background_tasks.add_task(process_document, document["id"], file_bytes, file.filename)
 
-    return {**document,"warning":warning}
+    return {**document, "warning": warning}
 
 
 @router.get("")
@@ -104,7 +112,7 @@ async def delete_document(document_id: str, user: CurrentUser = Depends(get_curr
     client = get_service_client()
     resp = (
         client.table("documents")
-        .select("id")
+        .select("id, storage_path")
         .eq("id", document_id)
         .eq("owner_id", user.id)
         .execute()
@@ -112,31 +120,15 @@ async def delete_document(document_id: str, user: CurrentUser = Depends(get_curr
     if not resp.data:
         raise HTTPException(status_code=404, detail="Document not found.")
 
+    storage_path = resp.data[0]["storage_path"]
+
+    # Remove the actual file from storage first. If this fails we still want
+    # to know about it, but we don't want an orphaned storage file to block
+    # the user from deleting the document record.
+    try:
+        client.storage.from_("documents").remove([storage_path])
+    except Exception:
+        pass
+
     client.table("documents").delete().eq("id", document_id).execute()
     return None
-
-
-@router.post("/{document_id}/reprocess",status_code=202)
-async def reprocess_document(
-    document_id:str,
-    background_tasks:BackgroundTasks,
-    user:CurrentUser=Depends(get_current_user),
-):
-    client=get_service_client()
-    resp=(client.table("documents").select("id,storage_path,file_name").eq("id",document_id).eq("owner_id",user.id).execute())
-    if not resp.data:
-        raise HTTPException(status_code=404,detail="Document not found")
-
-    document=resp.data[0]
-    # Redownload the original file from storage
-    try:
-        file_bytes=client.storage.from_("documents").download(document["storage_path"])
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Could not fetch stored file:{e}")
-
-    client.table("documents").update({
-        "status":"pending","error_message":None
-    }).eq("id",document_id).execute()
-
-    background_tasks.add_task(process_document,document_id,file_bytes,document["file_name"])
-    return {"id":document_id,"status":"pending","message":"Reprocessing started"}

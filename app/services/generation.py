@@ -4,7 +4,7 @@ from groq import Groq
 from app.config import settings
 from app.services.retrieval import RetrievedChunk
 
-LLM_MODEL = "openai/gpt-oss-120b"
+LLM_MODEL = settings.llm_model
 
 SYSTEM_PROMPT="""You are a careful assistant that answers questions using ONLY the numbered context excerpts provided by the user
 
@@ -48,16 +48,24 @@ def generate_answer(query:str,chunks:list[RetrievedChunk]) -> GeneratedAnswer:
     context_block=_build_context_block(chunks)
     client=Groq(api_key=settings.groq_api_key)
 
-    response=client.chat.completions.create(
-        model=LLM_MODEL,
-        response_format={"type":"json_object"},
-        temperature=0,
-        messages=[
-            {"role":"system","content":SYSTEM_PROMPT},
-            {"role":"user","content":f"Context excerpts:\n\n{context_block}\n\nQuestion:{query}"},
+    try:
+        response=client.chat.completions.create(
+            model=LLM_MODEL,
+            response_format={"type":"json_object"},
+            temperature=0,
+            messages=[
+                {"role":"system","content":SYSTEM_PROMPT},
+                {"role":"user","content":f"Context excerpts:\n\n{context_block}\n\nQuestion:{query}"},
 
-        ]
-    )
+            ]
+        )
+    except Exception:
+        # Groq down/rate-limited/timeout — fail safe instead of a raw 500.
+        return GeneratedAnswer(
+            answer="The AI service is temporarily unavailable. Please try asking again in a moment.",
+            is_answerable=False,
+            citations=[]
+        )
 
     raw=response.choices[0].message.content
     try:

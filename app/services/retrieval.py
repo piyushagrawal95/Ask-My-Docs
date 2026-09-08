@@ -1,9 +1,10 @@
 from dataclasses import dataclass
 from app.database import get_service_client
 from app.services.embeddings import embed_query,rerank
+from app.config import settings
 
-CANDIDATE_POOL_SIZE=20
-RRF_K=60
+CANDIDATE_POOL_SIZE=settings.candidate_pool_size
+RRF_K=settings.rrf_k
 
 @dataclass
 class RetrievedChunk:
@@ -109,10 +110,11 @@ def rerank_candidates(query:str, candidates:list[RetrievedChunk],top_k:int) -> l
     return reranked[:top_k]
 
 
-def retrieve(document_ids:list[str],query:str,top_k:int=5):
+def retrieve(document_ids:list[str],query:str,top_k:int=None):
     if not document_ids:
         return []
 
+    top_k=top_k if top_k is not None else settings.retrieval_top_k
     query_embedding=embed_query(query)
     candidates=hybrid_search(document_ids,query,query_embedding,k=CANDIDATE_POOL_SIZE)
     return rerank_candidates(query,candidates,top_k=top_k)

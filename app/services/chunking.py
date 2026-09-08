@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from app.config import settings
 
 @dataclass
 class Chunk:
@@ -9,8 +10,8 @@ class Chunk:
 
 def chunk_pages(pages:list[tuple[int,str]]) -> list[Chunk]:
     splitter=RecursiveCharacterTextSplitter(
-        chunk_size=800,
-        chunk_overlap=120,
+        chunk_size=settings.chunk_size,
+        chunk_overlap=settings.chunk_overlap,
         separators=["\n\n","\n",". "," ",""]
     )
 

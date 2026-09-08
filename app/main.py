@@ -18,16 +18,6 @@ app.include_router(documents.router)
 app.include_router(conversations.router)
 
 
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
-
-
-@app.get("/test-db")
-async def test_db():
-    client = get_service_client()
-    resp = client.table("documents").select("*").execute()
-    return {"documents_count": len(resp.data), "data": resp.data}
 
 
 @app.get("/me")

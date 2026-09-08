@@ -1,13 +1,14 @@
 from functools import lru_cache
 from sentence_transformers import SentenceTransformer, CrossEncoder
+from app.config import settings
 
 @lru_cache(maxsize=1)
 def get_embedding_model() -> SentenceTransformer:
-    return SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+    return SentenceTransformer(settings.embedding_model)
 
 @lru_cache(maxsize=1)
 def get_reranker_model() -> CrossEncoder:
-    return CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+    return CrossEncoder(settings.reranker_model)
 
 def embed_texts(texts:list[str]) -> list[list[float]]:
     model=get_embedding_model()
