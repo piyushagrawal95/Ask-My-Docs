@@ -11,8 +11,8 @@ class Settings(BaseSettings):
 
     # ---RAG pipeline tuning
     llm_model:str="openai/gpt-oss-120b"
-    embedding_model:str="sentence-transformers/all-MiniLM-L6-v2"
-    reranker_model:str="cross-encoder/ms-marco-MiniLM-L-6-v2"
+    embedding_model:str="BAAI/bge-small-en-v1.5"
+    reranker_model:str="Xenova/ms-marco-MiniLM-L-6-v2"
 
     chunk_size:int=800
     chunk_overlap:int=120
