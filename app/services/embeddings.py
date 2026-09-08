@@ -1,3 +1,4 @@
+import gc
 from app.config import settings
 
 _model = None
@@ -17,6 +18,11 @@ def _load_reranker():
         _reranker = TextCrossEncoder(model_name=settings.reranker_model)
     return _reranker
 
+def _unload_reranker():
+    global _reranker
+    _reranker = None
+    gc.collect()
+
 def embed_texts(texts: list[str]) -> list[list[float]]:
     model = _load_model()
     embeddings = list(model.embed(texts))
@@ -30,4 +36,5 @@ def rerank(query: str, candidates: list[str]) -> list[float]:
         return []
     model = _load_reranker()
     scores = list(model.rerank(query, candidates))
+    _unload_reranker()
     return [float(s) for s in scores]
