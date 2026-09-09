@@ -1,29 +1,43 @@
-import gc
+import cohere
 from app.config import settings
 
-_model = None
+_client = None
+_MAX_BATCH = 96  # Cohere ek request mein max 96 texts allow karta hai
 
-def _load_model():
-    global _model
-    if _model is None:
-        from fastembed import TextEmbedding
-        _model = TextEmbedding(model_name=settings.embedding_model)
-    return _model
+def _get_client():
+    global _client
+    if _client is None:
+        _client = cohere.ClientV2(settings.cohere_api_key)
+    return _client
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
+    """Document ke chunks ko embed karta hai (jab document upload hota hai)."""
     if not texts:
         return []
-    model = _load_model()
-    vectors = list(model.embed(texts))
-    result = [vec.tolist() for vec in vectors]
-    del vectors
-    gc.collect()
-    return result
+    client = _get_client()
+    all_embeddings: list[list[float]] = []
+    for i in range(0, len(texts), _MAX_BATCH):
+        batch = texts[i:i + _MAX_BATCH]
+        resp = client.embed(
+            texts=batch,
+            model=settings.embedding_model,
+            input_type="search_document",
+            embedding_types=["float"],
+        )
+        all_embeddings.extend(resp.embeddings.float_)
+    return all_embeddings
 
 def embed_query(text: str) -> list[float]:
-    return embed_texts([text])[0]
+    """User ki search query ko embed karta hai."""
+    client = _get_client()
+    resp = client.embed(
+        texts=[text],
+        model=settings.embedding_model,
+        input_type="search_query",
+        embedding_types=["float"],
+    )
+    return resp.embeddings.float_[0]
 
 def rerank(query: str, candidates: list[str]) -> list[float]:
-    # Reranker disabled permanently — free tier memory constraint.
-    # Hybrid search (vector + BM25 + RRF) already provides good ranking.
+    # Reranker permanently disabled — 512MB memory constraint.
     return [0.0] * len(candidates)

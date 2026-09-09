@@ -7,7 +7,7 @@ email-validator
 pypdf
 python-docx
 langchain-text-splitters
-fastembed
+cohere
 python-multipart
 groq
 pytest

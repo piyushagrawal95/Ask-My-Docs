@@ -6,12 +6,13 @@ class Settings(BaseSettings):
     supabase_anon_key:str
 
     groq_api_key:str
+    cohere_api_key:str
 
     allowed_origins:str="http://localhost:5173"
 
     # ---RAG pipeline tuning
     llm_model:str="openai/gpt-oss-120b"
-    embedding_model:str="BAAI/bge-small-en-v1.5"
+    embedding_model:str="embed-english-light-v3.0"
     reranker_model:str="Xenova/ms-marco-MiniLM-L-6-v2"
 
     chunk_size:int=800
