@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile, File, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile, File, Form, HTTPException
 from app.auth import get_current_user, CurrentUser
 from app.database import get_service_client
 from app.services.processing import process_document
@@ -9,12 +9,31 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 ALLOWED_EXTENSIONS = {ext.strip().lower() for ext in settings.allowed_extensions.split(",")}
 MAX_FILE_SIZE_BYTES = settings.max_file_size_mb * 1024 * 1024
 
+
+def _get_owned_conversation_id(client, conversation_id: str, user_id: str) -> str:
+    """Confirms the conversation exists and belongs to this user, else 404."""
+    resp = (
+        client.table("conversations")
+        .select("id")
+        .eq("id", conversation_id)
+        .eq("owner_id", user_id)
+        .execute()
+    )
+    if not resp.data:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+    return conversation_id
+
+
 @router.post("", status_code=201)
 async def upload_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    conversation_id: str = Form(...),
     user: CurrentUser = Depends(get_current_user),
 ):
+    client_for_check = get_service_client()
+    _get_owned_conversation_id(client_for_check, conversation_id, user.id)
+
     # 1. Extension check
     ext = file.filename.lower().rsplit(".", 1)[-1] if "." in file.filename else ""
     if ext not in ALLOWED_EXTENSIONS:
@@ -28,7 +47,6 @@ async def upload_document(
     if not file_bytes:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
-    # Large file warning (non-blocking) — must be defined before it's returned below.
     warning = None
     if len(file_bytes) > MAX_FILE_SIZE_BYTES:
         warning = f"File is larger than {MAX_FILE_SIZE_BYTES // (1024 * 1024)}MB — processing may take longer."
@@ -42,6 +60,7 @@ async def upload_document(
         .insert(
             {
                 "owner_id": user.id,
+                "conversation_id": conversation_id,
                 "file_name": file.filename,
                 "storage_path": storage_path,
                 "status": "pending",
@@ -59,8 +78,6 @@ async def upload_document(
         is_duplicate = "already exists" in error_text.lower() or "409" in error_text or "Duplicate" in error_text
 
         if is_duplicate:
-            # File already exists in storage — the pending row we just inserted
-            # is orphaned, clean it up rather than leaving a "failed" duplicate.
             client.table("documents").delete().eq("id", document["id"]).execute()
             raise HTTPException(
                 status_code=409,
@@ -72,20 +89,20 @@ async def upload_document(
         ).eq("id", document["id"]).execute()
         raise HTTPException(status_code=502, detail="Failed to store file. Please try again.")
 
-    # 5. Processing background mein trigger karo (upload request turant return ho jayega,
-    #    processing background mein chalti rahegi)
+    # 5. Processing background mein trigger karo
     background_tasks.add_task(process_document, document["id"], file_bytes, file.filename)
 
     return {**document, "warning": warning}
 
 
 @router.get("")
-async def list_documents(user: CurrentUser = Depends(get_current_user)):
+async def list_documents(conversation_id: str, user: CurrentUser = Depends(get_current_user)):
     client = get_service_client()
     resp = (
         client.table("documents")
         .select("*")
         .eq("owner_id", user.id)
+        .eq("conversation_id", conversation_id)
         .order("created_at", desc=True)
         .execute()
     )
@@ -122,9 +139,6 @@ async def delete_document(document_id: str, user: CurrentUser = Depends(get_curr
 
     storage_path = resp.data[0]["storage_path"]
 
-    # Remove the actual file from storage first. If this fails we still want
-    # to know about it, but we don't want an orphaned storage file to block
-    # the user from deleting the document record.
     try:
         client.storage.from_("documents").remove([storage_path])
     except Exception:

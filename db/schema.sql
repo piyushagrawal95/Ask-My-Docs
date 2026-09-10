@@ -3,10 +3,21 @@
 create extension if not exists vector
 create extension if not exists pg_trgm --optional, helps fuzzy text search
 
---documents
+-- 1. conversations
+create table if not exists conversations (
+    id uuid primary key default gen_random_uuid(),
+    owner_id uuid not null references auth.users(id) on delete cascade,
+    title text,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+create index if not exists idx_conversations_owner_id on conversations(owner_id);
+
+-- 2. documents
 create table if not exists documents(
     id uuid primary key default gen_random_uuid(),
     owner_id uuid not null references auth.users(id) on delete cascade,
+    conversation_id uuid references conversations(id) on delete cascade,
     file_name text not null,
     storage_path text not null,
     status text not null default 'pending'
@@ -18,8 +29,9 @@ create table if not exists documents(
 );
 create index if not exists idx_documents_owner_id on documents(owner_id);
 create index if not exists idx_documents_status on documents(status);
+create index if not exists idx_documents_conversation_id on documents(conversation_id);
 
---document chunks
+-- 3. document chunks
 create table if not exists document_chunks(
     id uuid primary key default gen_random_uuid(),
     document_id uuid not null references documents(id) on delete cascade,
@@ -35,17 +47,7 @@ create index if not exists idx_chunks_document_id on document_chunks(document_id
 create index if not exists idx_chunks_embedding on document_chunks using hnsw(embedding vector_cosine_ops);
 create index if not exists idx_chunks_content_tsv on document_chunks using gin(content_tsv);
 
--- 4. conversations
-create table if not exists conversations (
-    id uuid primary key default gen_random_uuid(),
-    owner_id uuid not null references auth.users(id) on delete cascade,
-    title text,
-    created_at timestamptz not null default now(),
-    updated_at timestamptz not null default now()
-);
-create index if not exists idx_conversations_owner_id on conversations(owner_id);
-
--- 5. messages
+-- 4. messages
 create table if not exists messages (
     id uuid primary key default gen_random_uuid(),
     conversation_id uuid not null references conversations(id) on delete cascade,
@@ -56,7 +58,7 @@ create table if not exists messages (
 );
 create index if not exists idx_messages_conversation_id on messages(conversation_id);
 
--- 6. citations
+-- 5. citations
 create table if not exists citations (
     id uuid primary key default gen_random_uuid(),
     message_id uuid not null references messages(id) on delete cascade,
@@ -69,7 +71,7 @@ create table if not exists citations (
 );
 create index if not exists idx_citations_message_id on citations(message_id);
 
--- 7. Row Level Security (defense in depth; backend uses the service-role
+-- 6. Row Level Security (defense in depth; backend uses the service-role
 --    key which bypasses RLS, but this protects direct/anon-key access too)
 alter table documents enable row level security;
 alter table document_chunks enable row level security;
@@ -107,7 +109,7 @@ create policy "citations via owned message" on citations
         )
     );
 
--- 8. RPC: vector similarity search
+-- 7. RPC: vector similarity search
 create or replace function match_document_chunks(
     p_document_ids uuid[],
     p_query_embedding vector(384),
@@ -126,7 +128,7 @@ language sql stable as $$
     limit p_match_count;
 $$;
 
--- 9. RPC: BM25-style keyword search (Postgres full-text rank)
+-- 8. RPC: BM25-style keyword search (Postgres full-text rank)
 create or replace function search_document_chunks_bm25(
     p_document_ids uuid[],
     p_query text,

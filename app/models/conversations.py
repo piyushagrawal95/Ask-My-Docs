@@ -36,4 +36,4 @@ class ConversationDetailResponse(BaseModel):
 
 class AskQuestionRequest(BaseModel):
     question:str
-    document_ids:list[str]|None=None
+    
