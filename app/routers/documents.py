@@ -53,7 +53,7 @@ async def upload_document(
 
     # 3. documents table mein row banao (status = pending)
     client = get_service_client()
-    storage_path = f"{user.id}/{file.filename}"
+    storage_path = f"{user.id}/{conversation_id}/{file.filename}"
 
     insert_resp = (
         client.table("documents")
