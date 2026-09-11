@@ -73,20 +73,23 @@ async def delete_conversation(conversation_id: str, user: CurrentUser = Depends(
     client = get_service_client()
     _get_owned_conversation(client, conversation_id, user.id)  # 404s + ownership check
 
-    # Clean up messages (and their citations) first, in case the DB doesn't
-    # have ON DELETE CASCADE set up on these foreign keys.
-    messages_resp = (
-        client.table("messages")
-        .select("id")
-        .eq("conversation_id", conversation_id)
-        .execute()
-    )
-    message_ids = [m["id"] for m in messages_resp.data]
-    if message_ids:
-        client.table("citations").delete().in_("message_id", message_ids).execute()
-        client.table("messages").delete().eq("conversation_id", conversation_id).execute()
+    docs_resp=(client.table("documents").select("storage_path").eq("conversation_id").execute())
+    storage_paths=[d["storage_path"] for d in docs_resp.data]
+    if storage_paths:
+        try:
+            client.storage.from_("documents").remove(storage_paths)
+        except Exception:
+            pass
 
-    client.table("conversations").delete().eq("id", conversation_id).execute()
+    message_resp=(client.table("messages").select("id").eq("conversation_id",conversation_id).execute())
+    message_ids=[m["id"] for m in message_resp.data]
+    if message_ids:
+        client.table("citations").delete().in_("message_id",message_ids).execute()
+        client.table("messages").delete().eq("conversation_id",conversation_id).execute()
+
+    #Explicitly delete docuemnts too
+    client.table("documents").delete().eq("conversation_id",conversation_id).execute()
+    client.table("conversations").delete().eq("id",conversation_id).execute()
     return None
 
 
@@ -149,7 +152,7 @@ async def ask_question(
             )
             .execute()
         ).data[0]
-        return {**assistant_row, "citations": []}
+        return {**assistant_row, "citations": []}   
 
     # 4. Save assistant message
     assistant_row = (
