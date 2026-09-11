@@ -100,24 +100,8 @@ async def ask_question(
     _get_owned_conversation(client, conversation_id, user.id)  # 404s + ownership check
 
     # 1. Resolve which documents to search: explicit list (ownership-checked) or all of the user's ready docs
-    if body.document_ids:
-        docs_resp = (
-            client.table("documents")
-            .select("id")
-            .in_("id", body.document_ids)
-            .eq("owner_id", user.id)
-            .eq("status", "ready")
-            .execute()
-        )
-    else:
-        docs_resp = (
-            client.table("documents")
-            .select("id")
-            .eq("owner_id", user.id)
-            .eq("status", "ready")
-            .execute()
-        )
-    document_ids = [d["id"] for d in docs_resp.data]
+    docs_resp=(client.table("documents").select("id").eq("owner_id",user.id).eq("conversation_id",conversation_id).eq("status","ready").execute())
+    document_ids=[d["id"] for d in docs_resp.data]
 
     # Check if this is the first message of the conversation (for auto titling)
     existing_messages=(
