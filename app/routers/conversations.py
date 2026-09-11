@@ -8,7 +8,7 @@ from app.models.conversations import (
     ConversationResponse,
     MessageResponse,
 )
-from app.services.retrieval import retrieve
+from app.services.retrieval import retrieve,RetrievalError
 from app.services.generation import generate_answer
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
@@ -132,8 +132,24 @@ async def ask_question(
         return {**assistant_row, "citations": []}
 
     # 3. Retrieve -> generate
-    chunks = retrieve(document_ids, body.question)
-    result = generate_answer(body.question, chunks)
+        # 3. Retrieve -> generate
+    try:
+        chunks = retrieve(document_ids, body.question)
+        result = generate_answer(body.question, chunks)
+    except RetrievalError:
+        assistant_row = (
+            client.table("messages")
+            .insert(
+                {
+                    "conversation_id": conversation_id,
+                    "role": "assistant",
+                    "content": "Something went wrong while searching your documents. Please try asking again in a moment.",
+                    "is_answerable": False,
+                }
+            )
+            .execute()
+        ).data[0]
+        return {**assistant_row, "citations": []}
 
     # 4. Save assistant message
     assistant_row = (

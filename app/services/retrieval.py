@@ -110,13 +110,17 @@ def rerank_candidates(query:str, candidates:list[RetrievedChunk],top_k:int) -> l
     return reranked[:top_k]
 
 
+class RetrievalError(Exception):
+    pass
+
 def retrieve(document_ids:list[str],query:str,top_k:int=None):
     if not document_ids:
         return []
 
     top_k=top_k if top_k is not None else settings.retrieval_top_k
-    query_embedding=embed_query(query)
-    candidates=hybrid_search(document_ids,query,query_embedding,k=CANDIDATE_POOL_SIZE)
-    return rerank_candidates(query,candidates,top_k=top_k)
-
-
+    try:
+        query_embedding=embed_query(query)
+        candidates=hybrid_search(document_ids,query,query_embedding,k=CANDIDATE_POOL_SIZE)
+        return rerank_candidates(query,candidates,top_k=top_k)
+    except Exception as e:
+        raise RetrievalError(str(e))
