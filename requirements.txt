@@ -13,3 +13,4 @@ groq
 pytest
 pytest-mock
 httpx
+fonttools
