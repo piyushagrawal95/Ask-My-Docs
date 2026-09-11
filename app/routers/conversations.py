@@ -8,7 +8,7 @@ from app.models.conversations import (
     ConversationResponse,
     MessageResponse,
 )
-from app.services.retrieval import retrieve,RetrievalError
+from app.services.retrieval import retrieve, RetrievalError
 from app.services.generation import generate_answer
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
@@ -73,23 +73,40 @@ async def delete_conversation(conversation_id: str, user: CurrentUser = Depends(
     client = get_service_client()
     _get_owned_conversation(client, conversation_id, user.id)  # 404s + ownership check
 
-    docs_resp=(client.table("documents").select("storage_path").eq("conversation_id",conversation_id).execute())
-    storage_paths=[d["storage_path"] for d in docs_resp.data]
+    # Clean up this conversation's uploaded files from storage first.
+    # Deleting the conversation row cascades in the database (documents ->
+    # document_chunks -> citations), but that only removes DB rows — the
+    # actual files in the storage bucket need to be removed explicitly.
+    docs_resp = (
+        client.table("documents")
+        .select("storage_path")
+        .eq("conversation_id", conversation_id)
+        .execute()
+    )
+    storage_paths = [d["storage_path"] for d in docs_resp.data]
     if storage_paths:
         try:
             client.storage.from_("documents").remove(storage_paths)
         except Exception:
             pass
 
-    message_resp=(client.table("messages").select("id").eq("conversation_id",conversation_id).execute())
-    message_ids=[m["id"] for m in message_resp.data]
+    # Clean up messages (and their citations) first, in case the DB doesn't
+    # have ON DELETE CASCADE set up on these foreign keys.
+    messages_resp = (
+        client.table("messages")
+        .select("id")
+        .eq("conversation_id", conversation_id)
+        .execute()
+    )
+    message_ids = [m["id"] for m in messages_resp.data]
     if message_ids:
-        client.table("citations").delete().in_("message_id",message_ids).execute()
-        client.table("messages").delete().eq("conversation_id",conversation_id).execute()
+        client.table("citations").delete().in_("message_id", message_ids).execute()
+        client.table("messages").delete().eq("conversation_id", conversation_id).execute()
 
-    #Explicitly delete docuemnts too
-    client.table("documents").delete().eq("conversation_id",conversation_id).execute()
-    client.table("conversations").delete().eq("id",conversation_id).execute()
+    # Explicitly delete documents too (defensive, same reasoning as above).
+    client.table("documents").delete().eq("conversation_id", conversation_id).execute()
+
+    client.table("conversations").delete().eq("id", conversation_id).execute()
     return None
 
 
@@ -102,7 +119,7 @@ async def ask_question(
     client = get_service_client()
     _get_owned_conversation(client, conversation_id, user.id)  # 404s + ownership check
 
-    # 1. Resolve which documents to search: explicit list (ownership-checked) or all of the user's ready docs
+    # 1. Resolve which documents to search: only this conversation's ready documents
     docs_resp=(client.table("documents").select("id").eq("owner_id",user.id).eq("conversation_id",conversation_id).eq("status","ready").execute())
     document_ids=[d["id"] for d in docs_resp.data]
 
@@ -112,6 +129,18 @@ async def ask_question(
         .select("id").eq("conversation_id",conversation_id).limit(1).execute()
     )
     is_first_message=len(existing_messages.data)==0
+
+    # Fetch recent conversation history (before saving the new message) so
+    # follow-up requests like "explain that in Hindi" have context.
+    history_resp = (
+        client.table("messages")
+        .select("role, content")
+        .eq("conversation_id", conversation_id)
+        .order("created_at", desc=True)
+        .limit(6)
+        .execute()
+    )
+    history = list(reversed(history_resp.data))
 
     # 2. Save the user's message first
     client.table("messages").insert(
@@ -135,10 +164,9 @@ async def ask_question(
         return {**assistant_row, "citations": []}
 
     # 3. Retrieve -> generate
-        # 3. Retrieve -> generate
     try:
         chunks = retrieve(document_ids, body.question)
-        result = generate_answer(body.question, chunks)
+        result = generate_answer(body.question, chunks, history)
     except RetrievalError:
         assistant_row = (
             client.table("messages")
@@ -152,7 +180,7 @@ async def ask_question(
             )
             .execute()
         ).data[0]
-        return {**assistant_row, "citations": []}   
+        return {**assistant_row, "citations": []}
 
     # 4. Save assistant message
     assistant_row = (
