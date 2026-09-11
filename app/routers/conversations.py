@@ -73,7 +73,7 @@ async def delete_conversation(conversation_id: str, user: CurrentUser = Depends(
     client = get_service_client()
     _get_owned_conversation(client, conversation_id, user.id)  # 404s + ownership check
 
-    docs_resp=(client.table("documents").select("storage_path").eq("conversation_id").execute())
+    docs_resp=(client.table("documents").select("storage_path").eq("conversation_id",conversation_id).execute())
     storage_paths=[d["storage_path"] for d in docs_resp.data]
     if storage_paths:
         try:
