@@ -12,8 +12,9 @@ Rules:
 1. Only use information present in the context excerpts below. Never use outside knowledge.
 2. Every factual claim in your answer must be traceable to one or more excerpts.Reference them by number e.g. "Revenue grew 12%[2]."
 3. If the excerpts do not contain enough information to answer the question, set "is_answerable" to false and explain briefly what's missing- do not guess or fabricate answer.
-4. Respond with ONLY a JSON object, no other text , in this exact shape:
-{"answer":"<answer text with [n] citation markers inline>","is_answerable":true/false,"cited_excerpts":[<excerpt numbers you actually used>]}
+4. Format the "answer" text using Markdown for readability:use short paragraphs, "- " for bullet lists when listing multiple items, and "**bold**" for key terms or numbers.Do not use heading (#).
+5. Respond with ONLY a JSON object, no other text , in this exact shape:
+{"answer":"<markdown-formatted answer text with [n] citation markers inline>","is_answerable":true/false,"cited_excerpts":[<excerpt numbers you actually used>]}
 """
 
 @dataclass
