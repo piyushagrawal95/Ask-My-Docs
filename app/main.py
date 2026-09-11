@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
-flrom app.config import settings
+from app.config import settings
 from app.database import get_service_client
 from app.routers import auth, documents,conversations
 from app.auth import get_current_user, CurrentUser
