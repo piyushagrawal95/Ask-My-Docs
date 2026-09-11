@@ -13,9 +13,10 @@ Rules:
 2. Every factual claim in your answer must be traceable to one or more excerpts.Reference them by number e.g. "Revenue grew 12%[2]."
 3. If the excerpts do not contain enough information to answer the question, set "is_answerable" to false and explain briefly what's missing- do not guess or fabricate answer.
 4. If the user's current message is a follow-up about the conversation itself rather than a new question about the documents — for example "explain that in Hindi", "translate the last answer", "summarize that shorter", "isko hindi mein samjhao" — use the conversation history to figure out what it refers to, and fulfill the request (translate/rephrase/shorten the earlier assistant answer). Treat this as answerable (is_answerable: true) even if the excerpts alone wouldn't answer it, since you're reusing information already given earlier in the conversation. Keep the original citation numbers where they still apply.
-5. Match the language and script of the user's CURRENT message: if they write in Hindi (Devanagari script), answer fully in Hindi. If they write in Hinglish (Hindi words typed in Roman/English letters), answer in Hinglish the same way. If they write in English, answer in English. Never switch script/language on your own.
-6. Format the "answer" text using Markdown for readability: use short paragraphs, "- " for bullet lists when listing multiple items, and "**bold**" for key terms or numbers. Do not use headings (#).
-7. Respond with ONLY a JSON object, no other text , in this exact shape:
+5. If the user asks about the documents themselves rather than their content — for example "how many documents have I uploaded?", "what documents do I have?", "what is this document about?" — use the "Uploaded documents" list given below (not the numbered excerpts) to answer. This is answerable (is_answerable: true) using that list, even with no excerpt citations, since it's not about document content.
+6. Match the language and script of the user's CURRENT message: if they write in Hindi (Devanagari script), answer fully in Hindi. If they write in Hinglish (Hindi words typed in Roman/English letters), answer in Hinglish the same way. If they write in English, answer in English. Never switch script/language on your own.
+7. Format the "answer" text using Markdown for readability: use short paragraphs, "- " for bullet lists when listing multiple items, and "**bold**" for key terms or numbers. Do not use headings (#).
+8. Respond with ONLY a JSON object, no other text , in this exact shape:
 {"answer":"<markdown-formatted answer text with [n] citation markers inline>","is_answerable":true/false,"cited_excerpts":[<excerpt numbers you actually used>]}
 """
 
@@ -40,10 +41,18 @@ def _build_context_block(chunks:list[RetrievedChunk])->str:
         parts.append(f"[{i}]{page_info}:{chunk.content}")
     return "\n\n".join(parts)
 
-def generate_answer(query:str,chunks:list[RetrievedChunk],history:list[dict]|None=None) -> GeneratedAnswer:
+
+def _build_document_list_block(document_list:list[dict]|None)->str:
+    if not document_list:
+        return "(No documents uploaded in this conversation yet.)"
+    lines=[f"- {d['file_name']} (status: {d['status']})" for d in document_list]
+    return "Uploaded documents in this conversation:\n" + "\n".join(lines)
+
+
+def generate_answer(query:str,chunks:list[RetrievedChunk],history:list[dict]|None=None,document_list:list[dict]|None=None) -> GeneratedAnswer:
     history = history or []
 
-    if not chunks and not history:
+    if not chunks and not history and not document_list:
         return GeneratedAnswer(
             answer="I couldn't find any relevant information in your documents to answer this question",
             is_answerable=False,
@@ -53,14 +62,15 @@ def generate_answer(query:str,chunks:list[RetrievedChunk],history:list[dict]|Non
     context_block=(
         _build_context_block(chunks)
         if chunks
-        else "(No new excerpts were retrieved for this message — rely on the conversation history below.)"
+        else "(No new excerpts were retrieved for this message — rely on the conversation history and document list below.)"
     )
+    document_list_block=_build_document_list_block(document_list)
     client=Groq(api_key=settings.groq_api_key)
 
     messages=[{"role":"system","content":SYSTEM_PROMPT}]
     for turn in history:
         messages.append({"role":turn["role"],"content":turn["content"]})
-    messages.append({"role":"user","content":f"Context excerpts:\n\n{context_block}\n\nQuestion:{query}"})
+    messages.append({"role":"user","content":f"{document_list_block}\n\nContext excerpts:\n\n{context_block}\n\nQuestion:{query}"})
 
     try:
         response=client.chat.completions.create(
@@ -104,6 +114,5 @@ def generate_answer(query:str,chunks:list[RetrievedChunk],history:list[dict]|Non
                     snippet=c.content[:300]
                 )
             )
-
 
     return GeneratedAnswer(answer=answer_text,is_answerable=is_answerable,citations=citations)
