@@ -1,8 +1,12 @@
 import gc
+import time
+import logging
 from app.database import get_service_client
 from app.services.extraction import extract_text, ExtractionError
 from app.services.chunking import chunk_pages
 from app.services.embeddings import embed_texts
+
+logger = logging.getLogger("processing")
 
 class ProcessingError(Exception):
     pass
@@ -12,9 +16,15 @@ def process_document(document_id:str, file_bytes:bytes, file_name:str) -> None:
 
     try:
         client.table("documents").update({"status":"processing"}).eq("id",document_id).execute()
+
+        t0=time.perf_counter()
         pages=extract_text(file_bytes,file_name)
+        logger.warning(f"[{document_id}] extract_text: {time.perf_counter()-t0:.1f}s, {len(pages)} pages")
         del file_bytes  # no longer needed once text is extracted
+
+        t0=time.perf_counter()
         chunks=chunk_pages(pages)
+        logger.warning(f"[{document_id}] chunk_pages: {time.perf_counter()-t0:.1f}s, {len(chunks)} chunks")
         del pages
         if not chunks:
             raise ProcessingError("No chunks produced from document content")
@@ -23,7 +33,9 @@ def process_document(document_id:str, file_bytes:bytes, file_name:str) -> None:
         client.table("document_chunks").delete().eq("document_id",document_id).execute()
 
         ## Embed all chunks (processed internally in small batches)
+        t0=time.perf_counter()
         embeddings=embed_texts([c.content for c in chunks])
+        logger.warning(f"[{document_id}] embed_texts: {time.perf_counter()-t0:.1f}s")
 
         ## Insert chunk rows
         rows=[{

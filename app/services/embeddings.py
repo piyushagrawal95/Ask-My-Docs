@@ -9,7 +9,7 @@ _MAX_BATCH = 96  # Cohere ek request mein max 96 texts allow karta hai
 def _get_client():
     global _client
     if _client is None:
-        _client = cohere.ClientV2(settings.cohere_api_key)
+        _client = cohere.ClientV2(settings.cohere_api_key, timeout=30)
     return _client
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
@@ -32,7 +32,7 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
             except TooManyRequestsError:
                 if attempt == 2:
                     raise
-                time.sleep(15 * (attempt + 1))  # 15s, then 30s wait, phir retry
+                time.sleep(5 * (attempt + 1))  # 5s, then 10s wait, phir retry
         all_embeddings.extend(resp.embeddings.float_)
         if i + _MAX_BATCH < len(texts):
             time.sleep(2)  # agla batch bhejne se pehle chhota delay

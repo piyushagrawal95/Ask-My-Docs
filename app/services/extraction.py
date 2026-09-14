@@ -29,7 +29,11 @@ def _extract_pdf(file_bytes: bytes) -> list[tuple[int, str]]:
             if plain_text.strip():
                 text_parts.append(plain_text)
 
-            tables = page.extract_tables()
+            # extract_tables() is expensive (line/rect crossing analysis).
+            # Skip it on pages with no ruling lines or rects — there's no
+            # ruled table to extract, so this is safe and saves most of the
+            # per-page cost on text-heavy PDFs.
+            tables = page.extract_tables() if (page.lines or page.rects) else []
             for table in tables:
                 if not table:
                     continue
