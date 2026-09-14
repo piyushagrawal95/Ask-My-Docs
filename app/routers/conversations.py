@@ -147,13 +147,31 @@ async def ask_question(
     # follow-up requests like "explain that in Hindi" have context.
     history_resp = (
         client.table("messages")
-        .select("role, content")
+        .select("role, content, citations(document_id)")
         .eq("conversation_id", conversation_id)
         .order("created_at", desc=True)
         .limit(30)
         .execute()
     )
-    history = list(reversed(history_resp.data))
+    raw_history = list(reversed(history_resp.data))
+
+    # Drop any assistant answer (and its preceding question) that was based
+    # on a document which has since been deleted — otherwise the model can
+    # still "recall" that fact straight from the visible history text, no
+    # matter what the prompt says.
+    existing_document_ids = {d["id"] for d in all_docs_resp.data}
+    history = []
+    for turn in raw_history:
+        if turn["role"] == "assistant":
+            cited_doc_ids = {
+                c["document_id"] for c in (turn.get("citations") or []) if c.get("document_id")
+            }
+            is_stale = bool(cited_doc_ids) and not cited_doc_ids.issubset(existing_document_ids)
+            if is_stale:
+                if history and history[-1]["role"] == "user":
+                    history.pop()
+                continue
+        history.append({"role": turn["role"], "content": turn["content"]})
 
     # 2. Save the user's message first
     client.table("messages").insert(
