@@ -123,6 +123,10 @@ async def ask_question(
     docs_resp=(client.table("documents").select("id").eq("owner_id",user.id).eq("conversation_id",conversation_id).eq("status","ready").execute())
     document_ids=[d["id"] for d in docs_resp.data]
 
+    # 1b. Full document list (all statuses) for the "what documents do I have?" prompt rule
+    all_docs_resp=(client.table("documents").select("file_name,status").eq("owner_id",user.id).eq("conversation_id",conversation_id).execute())
+    document_list=all_docs_resp.data
+
     # Check if this is the first message of the conversation (for auto titling)
     existing_messages=(
         client.table("messages")
@@ -137,7 +141,7 @@ async def ask_question(
         .select("role, content")
         .eq("conversation_id", conversation_id)
         .order("created_at", desc=True)
-        .limit(6)
+        .limit(30)
         .execute()
     )
     history = list(reversed(history_resp.data))
@@ -147,26 +151,10 @@ async def ask_question(
         {"conversation_id": conversation_id, "role": "user", "content": body.question}
     ).execute()
 
-    if not document_ids:
-        answer_text = "You don't have any processed documents yet to answer this from. Upload a document first."
-        assistant_row = (
-            client.table("messages")
-            .insert(
-                {
-                    "conversation_id": conversation_id,
-                    "role": "assistant",
-                    "content": answer_text,
-                    "is_answerable": False,
-                }
-            )
-            .execute()
-        ).data[0]
-        return {**assistant_row, "citations": []}
-
     # 3. Retrieve -> generate
     try:
         chunks = retrieve(document_ids, body.question)
-        result = generate_answer(body.question, chunks, history)
+        result = generate_answer(body.question, chunks, history,document_list)
     except RetrievalError:
         assistant_row = (
             client.table("messages")

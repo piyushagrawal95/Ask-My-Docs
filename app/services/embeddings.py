@@ -1,4 +1,6 @@
+import time
 import cohere
+from cohere.errors import TooManyRequestsError
 from app.config import settings
 
 _client = None
@@ -18,13 +20,22 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     all_embeddings: list[list[float]] = []
     for i in range(0, len(texts), _MAX_BATCH):
         batch = texts[i:i + _MAX_BATCH]
-        resp = client.embed(
-            texts=batch,
-            model=settings.embedding_model,
-            input_type="search_document",
-            embedding_types=["float"],
-        )
+        for attempt in range(3):
+            try:
+                resp = client.embed(
+                    texts=batch,
+                    model=settings.embedding_model,
+                    input_type="search_document",
+                    embedding_types=["float"],
+                )
+                break
+            except TooManyRequestsError:
+                if attempt == 2:
+                    raise
+                time.sleep(15 * (attempt + 1))  # 15s, then 30s wait, phir retry
         all_embeddings.extend(resp.embeddings.float_)
+        if i + _MAX_BATCH < len(texts):
+            time.sleep(2)  # agla batch bhejne se pehle chhota delay
     return all_embeddings
 
 def embed_query(text: str) -> list[float]:
