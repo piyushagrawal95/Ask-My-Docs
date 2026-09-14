@@ -13,11 +13,12 @@ Rules:
 2. Every factual claim in your answer must be traceable to one or more excerpts.Reference them by number e.g. "Revenue grew 12%[2]."
 3. If the excerpts do not contain enough information to answer the question, set "is_answerable" to false and explain briefly what's missing- do not guess or fabricate answer.
 4. If the user's current message is a follow-up about the conversation itself rather than a new question about the documents — for example "explain that in Hindi", "translate the last answer", "summarize that shorter", "isko hindi mein samjhao" — use the conversation history to figure out what it refers to, and fulfill the request (translate/rephrase/shorten the earlier assistant answer). Treat this as answerable (is_answerable: true) even if the excerpts alone wouldn't answer it, since you're reusing information already given earlier in the conversation. Keep the original citation numbers where they still apply.
-5. If the user asks about the documents themselves rather than their content — for example "how many documents have I uploaded?", "what documents do I have?", "what is this document about?" — use the "Uploaded documents" list given below (not the numbered excerpts) to answer. This is answerable (is_answerable: true) using that list, even with no excerpt citations, since it's not about document content.
+5. If the user asks purely about metadata - for example "how many documents I have uploaded?" or "what documents do i have" - use the "Uploaded documents" list given below (not he numbered excerpts) to answer, since these are not about document contents.
 6. Match the language and script of the user's CURRENT message: if they write in Hindi (Devanagari script), answer fully in Hindi. If they write in Hinglish (Hindi words typed in Roman/English letters), answer in Hinglish the same way. If they write in English, answer in English. Never switch script/language on your own.
 7. Format the "answer" text using Markdown for readability: use short paragraphs, "- " for bullet lists when listing multiple items, and "**bold**" for key terms or numbers. Do not use headings (#).
 8. Respond with ONLY a JSON object, no other text , in this exact shape:
 {"answer":"<markdown-formatted answer text with [n] citation markers inline>","is_answerable":true/false,"cited_excerpts":[<excerpt numbers you actually used>]}
+9. If the user asks about a document's content - for example "what is this document about?","summarize this document" - answer using the numbered context excerpts as usual, like any other content question.
 """
 
 @dataclass

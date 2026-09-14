@@ -1,6 +1,7 @@
 from io import BytesIO
-from pypdf import PdfReader
+import pdfplumber
 import docx
+
 
 class ExtractionError(Exception):
     pass
@@ -8,7 +9,7 @@ class ExtractionError(Exception):
 def extract_text(file_bytes: bytes, file_name: str) -> list[tuple[int, str]]:
     ext = file_name.lower().rsplit(".", 1)[-1]
 
-    if ext == "pdf":\
+    if ext == "pdf":
         return _extract_pdf(file_bytes)
     elif ext == "docx":
         return _extract_docx(file_bytes)
@@ -18,13 +19,32 @@ def extract_text(file_bytes: bytes, file_name: str) -> list[tuple[int, str]]:
         raise ExtractionError(f"Unsupported file type: .{ext}")
 
 
-def _extract_pdf(file_bytes:bytes) -> list[tuple[int,str]]:
-    reader=PdfReader(BytesIO(file_bytes))
-    pages=[]
-    for i, page in enumerate(reader.pages, start=1):
-        text = page.extract_text() or ""
-        if text.strip():
-            pages.append((i, text))
+def _extract_pdf(file_bytes: bytes) -> list[tuple[int, str]]:
+    pages = []
+    with pdfplumber.open(BytesIO(file_bytes)) as pdf:
+        for i, page in enumerate(pdf.pages, start=1):
+            text_parts = []
+
+            plain_text = page.extract_text() or ""
+            if plain_text.strip():
+                text_parts.append(plain_text)
+
+            tables = page.extract_tables()
+            for table in tables:
+                if not table:
+                    continue
+                md_rows = []
+                for row_i, row in enumerate(table):
+                    cells = [str(c).strip() if c else "" for c in row]
+                    md_rows.append("| " + " | ".join(cells) + " |")
+                    if row_i == 0:
+                        md_rows.append("|" + "---|" * len(cells))
+                text_parts.append("\n".join(md_rows))
+
+            combined = "\n\n".join(text_parts)
+            if combined.strip():
+                pages.append((i, combined))
+
     if not pages:
         raise ExtractionError("No extractable text found (possibly a scanned PDF).")
     return pages
