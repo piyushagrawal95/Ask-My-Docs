@@ -5,13 +5,12 @@ python-dotenv
 supabase
 email-validator
 pypdf
+pymupdf
 python-docx
 langchain-text-splitters
 cohere
 python-multipart
 groq
+httpx
 pytest
 pytest-mock
-httpx
-fonttools
-pdfplumber
