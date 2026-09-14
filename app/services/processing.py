@@ -50,7 +50,10 @@ def process_document(document_id:str, file_bytes:bytes, file_name:str) -> None:
         del chunks, embeddings
         gc.collect()
 
-        client.table("document_chunks").insert(rows).execute()
+        ## Insert chunk rows in batches of 50
+        BATCH_INSERT_SIZE = 50
+        for i in range(0, len(rows), BATCH_INSERT_SIZE):
+            client.table("document_chunks").insert(rows[i : i + BATCH_INSERT_SIZE]).execute()
 
         client.table("documents").update({"status":"ready","error_message":None}).eq("id",document_id).execute()
 

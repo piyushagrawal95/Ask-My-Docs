@@ -121,6 +121,32 @@ def retrieve(document_ids:list[str],query:str,top_k:int=None):
     try:
         query_embedding=embed_query(query)
         candidates=hybrid_search(document_ids,query,query_embedding,k=CANDIDATE_POOL_SIZE)
-        return rerank_candidates(query,candidates,top_k=top_k)
+        results=rerank_candidates(query,candidates,top_k=top_k)
+
+        # Fallback for summary/overview queries when no specific chunk passes similarity threshold
+        if not results:
+            client = get_service_client()
+            resp = (
+                client.table("document_chunks")
+                .select("id, document_id, content, chunk_index, page_number")
+                .in_("document_id", document_ids)
+                .order("chunk_index")
+                .limit(top_k)
+                .execute()
+            )
+            if resp.data:
+                results = [
+                    RetrievedChunk(
+                        id=row["id"],
+                        document_id=row["document_id"],
+                        content=row["content"],
+                        chunk_index=row["chunk_index"],
+                        page_number=row.get("page_number"),
+                        score=1.0,
+                    )
+                    for row in resp.data
+                ]
+
+        return results
     except Exception as e:
         raise RetrievalError(str(e))
