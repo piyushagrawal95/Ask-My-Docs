@@ -124,6 +124,41 @@ async def get_document(document_id: str, user: CurrentUser = Depends(get_current
     return resp.data[0]
 
 
+@router.post("/{document_id}/reprocess", status_code=202)
+async def reprocess_document(
+    document_id: str,
+    background_tasks: BackgroundTasks,
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Failed document ko dobara process karta hai — storage se wahi file
+    re-download karke process_document ko fir se trigger karta hai. User ko
+    dobara upload nahi karna padta."""
+    client = get_service_client()
+    resp = (
+        client.table("documents")
+        .select("id, storage_path, file_name")
+        .eq("id", document_id)
+        .eq("owner_id", user.id)
+        .execute()
+    )
+    if not resp.data:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    doc = resp.data[0]
+
+    try:
+        file_bytes = client.storage.from_("documents").download(doc["storage_path"])
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Could not re-fetch stored file: {e}")
+
+    client.table("documents").update(
+        {"status": "pending", "error_message": None}
+    ).eq("id", document_id).execute()
+
+    background_tasks.add_task(process_document, document_id, file_bytes, doc["file_name"])
+    return {"status": "pending"}
+
+
 @router.delete("/{document_id}", status_code=204)
 async def delete_document(document_id: str, user: CurrentUser = Depends(get_current_user)):
     client = get_service_client()
