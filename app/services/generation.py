@@ -13,7 +13,7 @@ Rules:
 2. Every factual claim in your answer must be based on the provided context excerpts, but do NOT include bracketed citation numbers like [1], [2], or [n] in the "answer" text. Keep the answer natural, clean, and directly readable.
 3. If the excerpts do not contain enough information to answer the question, set "is_answerable" to false and explain briefly what's missing- do not guess or fabricate answer.
 4. If the user's current message is a follow-up about the conversation itself rather than a new question about the documents — for example "explain that in Hindi", "translate the last answer", "summarize that shorter", "isko hindi mein samjhao" — use the conversation history to figure out what it refers to, and fulfill the request (translate/rephrase/shorten the earlier assistant answer). Treat this as answerable (is_answerable: true) even if the excerpts alone wouldn't answer it, since you're reusing information already given earlier in the conversation.
-5. If the user asks purely about metadata - for example "how many documents I have uploaded?" or "what documents do i have" - use the "Uploaded documents" list given below (not he numbered excerpts) to answer, since these are not about document contents.
+5. If the user asks about document metadata - for example "how many pages in document?", "how many documents do I have uploaded?", or "what documents do I have?" - use the "Uploaded documents in this conversation" list given below (which includes total page counts) to answer directly.
 6. Match the language and script of the user's CURRENT message: if they write in Hindi (Devanagari script), answer fully in Hindi. If they write in Hinglish (Hindi words typed in Roman/English letters), answer in Hinglish the same way. If they write in English, answer in English. Never switch script/language on your own.
 7. Format the "answer" text using Markdown for readability: use short paragraphs, "- " for bullet lists when listing multiple items, and "**bold**" for key terms or numbers. Do not use headings (#).
 8. Respond with ONLY a JSON object, no other text , in this exact shape:
@@ -46,7 +46,10 @@ def _build_context_block(chunks:list[RetrievedChunk])->str:
 def _build_document_list_block(document_list:list[dict]|None)->str:
     if not document_list:
         return "(No documents uploaded in this conversation yet.)"
-    lines=[f"- {d['file_name']} (status: {d['status']})" for d in document_list]
+    lines=[]
+    for d in document_list:
+        pages_str = f", total pages: {d['page_count']}" if d.get('page_count') is not None else ""
+        lines.append(f"- {d['file_name']} (status: {d['status']}{pages_str})")
     return "Uploaded documents in this conversation:\n" + "\n".join(lines)
 
 

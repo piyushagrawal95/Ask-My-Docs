@@ -123,9 +123,18 @@ async def ask_question(
     docs_resp=(client.table("documents").select("id").eq("owner_id",user.id).eq("conversation_id",conversation_id).eq("status","ready").execute())
     document_ids=[d["id"] for d in docs_resp.data]
 
-    # 1b. Full document list (all statuses) for the "what documents do I have?" prompt rule
-    all_docs_resp=(client.table("documents").select("file_name,status").eq("owner_id",user.id).eq("conversation_id",conversation_id).execute())
-    document_list=all_docs_resp.data
+    # 1b. Full document list (all statuses) for metadata queries (names, page count, etc.)
+    all_docs_resp=(client.table("documents").select("id,file_name,status").eq("owner_id",user.id).eq("conversation_id",conversation_id).execute())
+    document_list = []
+    for d in all_docs_resp.data:
+        p_count = None
+        try:
+            p_resp = client.table("document_chunks").select("page_number").eq("document_id", d["id"]).order("page_number", desc=True).limit(1).execute()
+            if p_resp.data and p_resp.data[0].get("page_number"):
+                p_count = p_resp.data[0]["page_number"]
+        except Exception:
+            pass
+        document_list.append({"file_name": d["file_name"], "status": d["status"], "page_count": p_count})
 
     # Check if this is the first message of the conversation (for auto titling)
     existing_messages=(

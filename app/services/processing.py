@@ -19,7 +19,8 @@ def process_document(document_id:str, file_bytes:bytes, file_name:str) -> None:
 
         t0=time.perf_counter()
         pages=extract_text(file_bytes,file_name)
-        logger.warning(f"[{document_id}] extract_text: {time.perf_counter()-t0:.1f}s, {len(pages)} pages")
+        page_count = len(pages)
+        logger.warning(f"[{document_id}] extract_text: {time.perf_counter()-t0:.1f}s, {page_count} pages")
         del file_bytes  # no longer needed once text is extracted
 
         t0=time.perf_counter()
