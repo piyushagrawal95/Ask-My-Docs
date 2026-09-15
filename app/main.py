@@ -20,6 +20,12 @@ app.include_router(conversations.router)
 
 
 
+@app.get("/")
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
+
 @app.get("/me")
 async def get_me(user: CurrentUser = Depends(get_current_user)):
-    return {"id": user.id, "email": user.email}
+    return {"id": user.id, "email": user.email}
