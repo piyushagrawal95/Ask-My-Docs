@@ -4,7 +4,6 @@ from pathlib import Path
 
 # Project root ko path me add karo taaki "app.*" imports kaam karein
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-1
 from app.database import get_service_client
 from app.services.processing import process_document
 from app.services.retrieval import retrieve
@@ -14,13 +13,39 @@ EVAL_DIR = Path(__file__).resolve().parent
 FIXTURES_DIR = EVAL_DIR / "fixtures"
 DATASET_PATH = EVAL_DIR / "eval_dataset.json"
 
-TEST_USER_ID = "3f7511b7-8b23-4830-8183-397d4a7578d2"
+TEST_USER_EMAIL = "eval-fixture-user@askmydocs.internal"
 
 ANSWER_CORRECTNESS_THRESHOLD = 0.7
 RETRIEVAL_ACCURACY_THRESHOLD = 0.7
 
 
-def setup_documents(client, dataset):
+def get_or_create_test_user(client) -> str:
+    """Ensures a fixture auth user exists in whichever Supabase project this
+    is running against (local dev or CI), and returns its id. Needed because
+    `documents.owner_id` has a foreign key onto auth.users - a hardcoded UUID
+    only works on the one project it happened to be created on."""
+    page = 1
+    while True:
+        resp = client.auth.admin.list_users(page=page, per_page=200)
+        users = resp if isinstance(resp, list) else getattr(resp, "users", [])
+        if not users:
+            break
+        for u in users:
+            if u.email == TEST_USER_EMAIL:
+                return u.id
+        page += 1
+
+    created = client.auth.admin.create_user(
+        {
+            "email": TEST_USER_EMAIL,
+            "password": "eval-fixture-password-not-used-anywhere",
+            "email_confirm": True,
+        }
+    )
+    return created.user.id
+
+
+def setup_documents(client, dataset, test_user_id):
     """Upload + process each fixture document once. Returns {filename: document_id}."""
     doc_ids = {}
     for filename in dataset["fixture_documents"]:
@@ -30,7 +55,7 @@ def setup_documents(client, dataset):
             client.table("documents")
             .insert(
                 {
-                    "owner_id": TEST_USER_ID,
+                    "owner_id": test_user_id,
                     "file_name": filename,
                     "storage_path": f"eval/{filename}",
                     "status": "pending",
@@ -129,9 +154,10 @@ def summarize(results):
 def main():
     dataset = json.loads(DATASET_PATH.read_text())
     client = get_service_client()
+    test_user_id = get_or_create_test_user(client)
 
     print(f"Setting up {len(dataset['fixture_documents'])} fixture document(s)...")
-    doc_ids = setup_documents(client, dataset)
+    doc_ids = setup_documents(client, dataset, test_user_id)
 
     results = []
     try:
