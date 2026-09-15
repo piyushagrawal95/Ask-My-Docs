@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     # ---RAG pipeline tuning
     llm_model:str="openai/gpt-oss-120b"
     embedding_model:str="embed-english-light-v3.0"
-    reranker_model:str="Xenova/ms-marco-MiniLM-L-6-v2"
+    reranker_model:str="rerank-v3.5"
 
     chunk_size:int=800
     chunk_overlap:int=120

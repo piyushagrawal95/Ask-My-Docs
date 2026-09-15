@@ -50,5 +50,23 @@ def embed_query(text: str) -> list[float]:
     return resp.embeddings.float_[0]
 
 def rerank(query: str, candidates: list[str]) -> list[float]:
-    # Reranker permanently disabled — 512MB memory constraint.
-    return [0.0] * len(candidates)
+    """Cohere Cloud Reranker API call.
+    Runs on Cohere's cloud infrastructure — 0 MB local RAM footprint.
+    Re-scores candidate chunks against the user query for maximum precision."""
+    if not candidates or not query:
+        return [0.0] * len(candidates)
+    try:
+        client = _get_client()
+        resp = client.rerank(
+            model=settings.reranker_model,
+            query=query,
+            documents=candidates,
+        )
+        scores = [0.0] * len(candidates)
+        for item in resp.results:
+            scores[item.index] = float(item.relevance_score)
+        return scores
+    except Exception:
+        # Fail safe fallback: if Cohere call fails or rate-limits,
+        # return 0.0 so candidate order from hybrid search RRF is preserved.
+        return [0.0] * len(candidates)
