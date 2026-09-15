@@ -62,7 +62,7 @@ create index if not exists idx_messages_conversation_id on messages(conversation
 create table if not exists citations (
     id uuid primary key default gen_random_uuid(),
     message_id uuid not null references messages(id) on delete cascade,
-    document_id uuid not null references documents(id) on delete cascade,
+    document_id uuid references documents(id) on delete set null,
     chunk_id uuid references document_chunks(id) on delete set null,
     page_number int,
     snippet text,

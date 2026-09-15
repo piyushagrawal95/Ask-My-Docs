@@ -163,10 +163,11 @@ async def ask_question(
     history = []
     for turn in raw_history:
         if turn["role"] == "assistant":
-            cited_doc_ids = {
-                c["document_id"] for c in (turn.get("citations") or []) if c.get("document_id")
-            }
-            is_stale = bool(cited_doc_ids) and not cited_doc_ids.issubset(existing_document_ids)
+            citations=turn.get("citations") or []
+            has_dangling_citation=any(c.get("document_id") is None for c in citations)
+            cited_doc_ids={c["document_id"] for c in citations if c.get("document_id")}
+            
+            is_stale = has_dangling_citation or  (bool(cited_doc_ids) and not cited_doc_ids.issubset(existing_document_ids))
             if is_stale:
                 if history and history[-1]["role"] == "user":
                     history.pop()

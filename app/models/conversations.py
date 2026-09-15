@@ -1,5 +1,6 @@
 from datetime import datetime
 from pydantic import BaseModel
+from pydantic import Field
 
 class CitationResponse(BaseModel):
     id:str
@@ -17,7 +18,7 @@ class MessageResponse(BaseModel):
     content:str
     is_answerable:bool
     created_at:datetime
-    citations:list[CitationResponse]=[]
+    citations:list[CitationResponse]=Field(default=[],exclude=True)
 
 class ConversationResponse(BaseModel):
     id:str
