@@ -14,6 +14,12 @@ class ProcessingError(Exception):
 def process_document(document_id:str, file_bytes:bytes, file_name:str) -> None:
     client=get_service_client()
 
+    def _report_progress(pages_done,total_pages):
+        try:
+            client.table("documents").update({"page_count":total_pages,"pages_processed":pages_done}).eq("id",document_id).execute()
+        except Exception:
+            logger.warning(f"[{document_id}] progress update failed",exc_info=true)
+
     try:
         client.table("documents").update({"status":"processing"}).eq("id",document_id).execute()
 

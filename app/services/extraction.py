@@ -1,3 +1,4 @@
+import logging
 from io import BytesIO
 import docx
 from docx.text.paragraph import Paragraph
@@ -5,6 +6,8 @@ from docx.table import Table
 from docx.oxml.text.paragraph import CT_P
 from docx.oxml.table import CT_Tbl
 import fitz  # PyMuPDF
+
+logger = logging.getLogger("extraction")
 
 TABLE_START = "<<<TABLE>>>"
 TABLE_END = "<<<END_TABLE>>>"
@@ -14,11 +17,11 @@ class ExtractionError(Exception):
   pass
 
 
-def extract_text(file_bytes: bytes, file_name: str) -> list[tuple[int, str]]:
+def extract_text(file_bytes: bytes, file_name: str,on_progress=None) -> list[tuple[int, str]]:
   ext = file_name.lower().rsplit(".", 1)[-1]
 
   if ext == "pdf":
-    return _extract_pdf(file_bytes)
+    return _extract_pdf(file_bytes, on_progress=on_progress)
   elif ext == "docx":
     return _extract_docx(file_bytes)
   elif ext == "txt":
@@ -27,7 +30,7 @@ def extract_text(file_bytes: bytes, file_name: str) -> list[tuple[int, str]]:
     raise ExtractionError(f"Unsupported file type: .{ext}")
 
 
-def _extract_pdf(file_bytes: bytes) -> list[tuple[int, str]]:
+def _extract_pdf(file_bytes: bytes,on_progress=None) -> list[tuple[int, str]]:
   """PyMuPDF based ultra-fast and low-memory extractor.
 
   - 82 pages parse hone me sirf 2-3 seconds lagenge (15 minute nahi).
@@ -41,6 +44,12 @@ def _extract_pdf(file_bytes: bytes) -> list[tuple[int, str]]:
     doc = fitz.open(stream=file_bytes, filetype="pdf")
   except Exception as e:
     raise ExtractionError(f"Could not open PDF: {e}")
+
+  total_pages=doc.page_count
+  if on_progress:
+    on_progress(0,total_pages)
+
+  PROGRESS_EVERY =10 # har 10 pages ke baad DB m update krna
 
   for page_num, page in enumerate(doc, start=1):
     elements = []  # tuple of (y0_position, content_str)
@@ -104,6 +113,11 @@ def _extract_pdf(file_bytes: bytes) -> list[tuple[int, str]]:
     if combined:
       pages.append((page_num, combined))
 
+    # 5. Progress report karein — sirf har PROGRESS_EVERY pages ke baad ya
+    # last page par, taaki DB writes minimal rahein aur speed pe asar na pade.
+    if on_progress and (page_num % PROGRESS_EVERY == 0 or page_num == total_pages):
+      on_progress(page_num, total_pages)
+
   doc.close()
 
   if not pages:
@@ -166,7 +180,14 @@ def _extract_docx(file_bytes: bytes) -> list[tuple[int, str]]:
       if text:
         elements.append(text)
     elif isinstance(item, Table):
-      md = _docx_table_to_markdown(item)
+      # Ek malformed/nested table poore document ka extraction crash na kare —
+      # isliye per-table try/except: fail hone par sirf wo table skip hota hai,
+      # baaki paragraphs aur tables normally extract hote rehte hain.
+      try:
+        md = _docx_table_to_markdown(item)
+      except Exception:
+        logger.warning("Skipping a docx table that failed to convert to markdown", exc_info=True)
+        md = ""
       if md:
         elements.append(f"{TABLE_START}\n{md}\n{TABLE_END}")
 

@@ -24,6 +24,7 @@ create table if not exists documents(
         check (status in('pending','processing','ready','failed')),
     error_message text,
     page_count int,
+    pages_processed int,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
