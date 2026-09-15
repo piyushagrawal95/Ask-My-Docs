@@ -18,7 +18,7 @@ def process_document(document_id:str, file_bytes:bytes, file_name:str) -> None:
         try:
             client.table("documents").update({"page_count":total_pages,"pages_processed":pages_done}).eq("id",document_id).execute()
         except Exception:
-            logger.warning(f"[{document_id}] progress update failed",exc_info=true)
+            logger.warning(f"[{document_id}] progress update failed",exc_info=True)
 
     try:
         client.table("documents").update({"status":"processing"}).eq("id",document_id).execute()
