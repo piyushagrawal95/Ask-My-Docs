@@ -28,6 +28,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: "dummy-service-role-key"
           SUPABASE_ANON_KEY: "dummy-anon-key"
           GROQ_API_KEY: "dummy-groq-key"
+          COHERE_API_KEY: "dummy-cohere-key"
         run: pytest -v
 
   eval:
@@ -45,13 +46,6 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r requirements.txt
-
-      - name: Debug secret length
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-        run: |
-          echo "URL length: ${#SUPABASE_URL}"
-          echo "First 8 chars: ${SUPABASE_URL:0:8}"
 
       - name: Run RAG evaluation
         env:

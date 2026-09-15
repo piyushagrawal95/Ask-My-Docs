@@ -136,6 +136,26 @@ async def ask_question(
             pass
         document_list.append({"file_name": d["file_name"], "status": d["status"], "page_count": p_count})
 
+    # If there are no documents in this conversation at all, skip the
+    # retrieve/generate round-trip entirely and reply directly.
+    if not all_docs_resp.data:
+        client.table("messages").insert(
+            {"conversation_id": conversation_id, "role": "user", "content": body.question}
+        ).execute()
+        assistant_row = (
+            client.table("messages")
+            .insert(
+                {
+                    "conversation_id": conversation_id,
+                    "role": "assistant",
+                    "content": "You don't have any processed documents yet to answer this from. Upload a document first.",
+                    "is_answerable": False,
+                }
+            )
+            .execute()
+        ).data[0]
+        return {**assistant_row, "citations": []}
+
     # Check if this is the first message of the conversation (for auto titling)
     existing_messages=(
         client.table("messages")

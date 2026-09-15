@@ -90,6 +90,6 @@ def test_ask_question_with_no_ready_documents(mock_get_client, mock_retrieve, mo
 
     assert resp.status_code == 201
     assert resp.json()["is_answerable"] is False
-    assert resp.json()["citations"] == []
+    assert "citations" not in resp.json()  # citations are intentionally excluded from API responses
     mock_retrieve.assert_not_called()
     mock_generate.assert_not_called()
