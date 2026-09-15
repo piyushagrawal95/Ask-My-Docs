@@ -11,14 +11,14 @@ SYSTEM_PROMPT="""You are a careful assistant that answers questions using ONLY t
 
 Rules:
 1. Only use information present in the context excerpts below. Never use outside knowledge.
-2. Every factual claim in your answer must be based on the provided context excerpts, but do NOT include bracketed citation numbers like [1], [2], or [n] in the "answer" text. Keep the answer natural, clean, and directly readable.
+2. Every factual claim in your answer must be based on the provided context excerpts, but do NOT include any citation markers, bracketed numbers, or excerpt labels in the "answer" text (e.g. do not write [1], [2], [n], [excerpt 1], [excerpts 1, 2], or (excerpt 1)). Put all used excerpt numbers strictly into the "cited_excerpts" list. Keep the answer natural, clean, and directly readable.
 3. If the excerpts do not contain enough information to answer the question, set "is_answerable" to false and explain briefly what's missing- do not guess or fabricate answer.
 4. If the user's current message is purely a formatting/language request about the PREVIOUS answer - for example "explain that in Hindi", "translate the last answer","summarize that shorter","isko hindi mai samjhao"- use conversation history to transform that specific prior answer, and treat this as answerable (is_answerable:true). Do NOT use conversation history to answer a fresh factual question (even one asked before in this conversation) unless the context excerpts also support it - the underlying documents may have changed or been deleted since that earlier answer was given.
 5. If the user asks about document metadata - for example "how many pages in document?", "how many documents do I have uploaded?", or "what documents do I have?" - use the "Uploaded documents in this conversation" list given below (which includes total page counts) to answer directly.
 6. Match the language and script of the user's CURRENT message: if they write in Hindi (Devanagari script), answer fully in Hindi. If they write in Hinglish (Hindi words typed in Roman/English letters), answer in Hinglish the same way. If they write in English, answer in English. Never switch script/language on your own.
 7. Format the "answer" text using Markdown for readability: use short paragraphs, "- " for bullet lists when listing multiple items, and "**bold**" for key terms or numbers. Do not use headings (#).
 8. Respond with ONLY a JSON object, no other text , in this exact shape:
-{"answer":"<clean markdown-formatted answer text WITHOUT any [n] bracketed citation markers>","is_answerable":true/false,"cited_excerpts":[<excerpt numbers you actually used>]}
+{"answer":"<clean markdown-formatted answer text WITHOUT any [n], [excerpt n], or citation markers>","is_answerable":true/false,"cited_excerpts":[<excerpt numbers you actually used>]}
 9. If the user asks about a document's content - for example "what is this document about?","summarize this document" - answer using the numbered context excerpts as usual, like any other content question.
 """
 
@@ -103,12 +103,31 @@ def generate_answer(query:str,chunks:list[RetrievedChunk],history:list[dict]|Non
             is_answerable=False,
             citations=[]
         )
-    answer_text=parsed.get("answer","")
-    # Clean up any bracket citation numbers like [1], [2], [10]
+    raw_answer = parsed.get("answer", "")
     import re
-    answer_text = re.sub(r"\[\d+\]", "", answer_text)
-    answer_text = re.sub(r"\s+([.,;:!?])", r"\1", answer_text)
-    answer_text = re.sub(r"[ \t]+", " ", answer_text).strip()
+    # Clean up bracketed citation markers e.g. [1], [1, 2], [excerpt 1], [Excerpts 1, 2], [source 1]
+    cleaned = re.sub(
+        r"\[\s*(?:(?:excerpt|excerpts|source|sources|doc|docs|document|page|pages|ref|reference)s?\s*:?)?\s*#?\d+(?:\s*(?:,|and|&|–|-)\s*#?\d+)*\s*\]",
+        "",
+        raw_answer,
+        flags=re.IGNORECASE,
+    )
+    # Clean up parenthesized citation markers e.g. (excerpt 1), (excerpts 1, 2)
+    cleaned = re.sub(
+        r"\(\s*(?:excerpt|excerpts|source|sources|doc|docs|document|page|pages|ref|reference)s?\s*:?\s*#?\d+(?:\s*(?:,|and|&|–|-)\s*#?\d+)*\s*\)",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    # Clean up any trailing/orphan citation markers e.g. [excerpt]
+    cleaned = re.sub(
+        r"\[\s*(?:excerpt|excerpts|source|sources|reference)s?\s*\]",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(r"\s+([.,;:!?])", r"\1", cleaned)
+    answer_text = re.sub(r"[ \t]+", " ", cleaned).strip()
 
     is_answerable=parsed.get("is_answerable",False)
     cited_numbers=parsed.get("cited_excerpts",[])

@@ -42,3 +42,24 @@ def test_generate_answer_handles_invalid_json_gracefully(mock_groq_cls):
 
     result=generate_answer("question",chunks)
     assert result.is_answerable is False
+
+
+@patch("app.services.generation.Groq")
+def test_generate_answer_strips_various_citation_markers(mock_groq_cls):
+    chunks = [
+        RetrievedChunk(id="chunk-1", document_id="doc-1", content="Text", chunk_index=0, page_number=1, score=0.9),
+        RetrievedChunk(id="chunk-2", document_id="doc-1", content="Text 2", chunk_index=1, page_number=1, score=0.8),
+    ]
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = _fake_groq_response({
+        "answer": "Meera is CEO [excerpt 1]. Founded in 2016 [excerpts 1, 2] in Pune (excerpt 1).",
+        "is_answerable": True,
+        "cited_excerpts": [1, 2]
+    })
+    mock_groq_cls.return_value = mock_client
+
+    result = generate_answer("Who is CEO", chunks)
+    assert result.is_answerable is True
+    assert "[excerpt" not in result.answer.lower()
+    assert "(excerpt" not in result.answer.lower()
+    assert result.answer == "Meera is CEO. Founded in 2016 in Pune."
