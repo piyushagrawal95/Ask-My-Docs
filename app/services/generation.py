@@ -1,4 +1,5 @@
 import json
+import logging
 from dataclasses import dataclass
 from groq import Groq
 from app.config import settings
@@ -83,8 +84,9 @@ def generate_answer(query:str,chunks:list[RetrievedChunk],history:list[dict]|Non
             temperature=0,
             messages=messages
         )
-    except Exception:
+    except Exception as e:
         # Groq down/rate-limited/timeout — fail safe instead of a raw 500.
+        logging.error(f"Groq call failed:{e!r}")
         return GeneratedAnswer(
             answer="The AI service is temporarily unavailable. Please try asking again in a moment.",
             is_answerable=False,
