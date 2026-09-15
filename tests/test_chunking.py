@@ -23,3 +23,31 @@ def test_chunk_pages_split_long_text():
 def test_chunk_pages_skips_blank_pieces():
     chunks=chunk_pages([(1," \n\n    ")])
     assert chunks==[]
+
+
+def test_chunk_pages_docx_table_preservation():
+    from io import BytesIO
+    import docx as docx_lib
+    from app.services.extraction import extract_text
+
+    buf = BytesIO()
+    doc = docx_lib.Document()
+    doc.add_paragraph("Table description")
+    table = doc.add_table(rows=3, cols=2)
+    table.cell(0, 0).text = "Column A"
+    table.cell(0, 1).text = "Column B"
+    table.cell(1, 0).text = "100"
+    table.cell(1, 1).text = "200"
+    table.cell(2, 0).text = "300"
+    table.cell(2, 1).text = "400"
+    doc.save(buf)
+
+    pages = extract_text(buf.getvalue(), "data.docx")
+    chunks = chunk_pages(pages)
+
+    assert len(chunks) >= 1
+    # Check that the table chunk contains markdown table structure and values
+    all_chunks_text = "\n".join(c.content for c in chunks)
+    assert "| Column A | Column B |" in all_chunks_text
+    assert "| 100 | 200 |" in all_chunks_text
+    assert "| 300 | 400 |" in all_chunks_text

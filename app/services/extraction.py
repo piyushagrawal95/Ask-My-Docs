@@ -1,5 +1,9 @@
 from io import BytesIO
 import docx
+from docx.text.paragraph import Paragraph
+from docx.table import Table
+from docx.oxml.text.paragraph import CT_P
+from docx.oxml.table import CT_Tbl
 import fitz  # PyMuPDF
 
 TABLE_START = "<<<TABLE>>>"
@@ -108,12 +112,69 @@ def _extract_pdf(file_bytes: bytes) -> list[tuple[int, str]]:
   return pages
 
 
+def _docx_table_to_markdown(table: Table) -> str:
+  rows = []
+  for row in table.rows:
+    cells = [
+        cell.text.strip().replace("\r\n", " ").replace("\n", " ").replace("|", "\\|")
+        for cell in row.cells
+    ]
+    rows.append(cells)
+
+  if not rows:
+    return ""
+
+  if not any(any(c for c in r) for r in rows):
+    return ""
+
+  num_cols = len(rows[0])
+  header = "| " + " | ".join(rows[0]) + " |"
+  separator = "|" + "---|" * num_cols
+  lines = [header, separator]
+  for r in rows[1:]:
+    if len(r) < num_cols:
+      r = r + [""] * (num_cols - len(r))
+    elif len(r) > num_cols:
+      r = r[:num_cols]
+    lines.append("| " + " | ".join(r) + " |")
+
+  return "\n".join(lines)
+
+
+def _iter_docx_elements(parent, document):
+  for child in parent:
+    if isinstance(child, CT_P) or child.tag.endswith("p"):
+      yield Paragraph(child, document)
+    elif isinstance(child, CT_Tbl) or child.tag.endswith("tbl"):
+      yield Table(child, document)
+    elif child.tag.endswith("sdt"):
+      for sdt_child in child:
+        if sdt_child.tag.endswith("sdtContent"):
+          yield from _iter_docx_elements(sdt_child, document)
+
+
 def _extract_docx(file_bytes: bytes) -> list[tuple[int, str]]:
-  document = docx.Document(BytesIO(file_bytes))
-  text = "\n".join(p.text for p in document.paragraphs if p.text.strip())
-  if not text.strip():
+  try:
+    document = docx.Document(BytesIO(file_bytes))
+  except Exception as e:
+    raise ExtractionError(f"Could not open .docx file: {e}")
+
+  elements = []
+  for item in _iter_docx_elements(document.element.body, document):
+    if isinstance(item, Paragraph):
+      text = item.text.strip()
+      if text:
+        elements.append(text)
+    elif isinstance(item, Table):
+      md = _docx_table_to_markdown(item)
+      if md:
+        elements.append(f"{TABLE_START}\n{md}\n{TABLE_END}")
+
+  combined = "\n\n".join(elements).strip()
+  if not combined:
     raise ExtractionError("No extractable text found in .docx file.")
-  return [(1, text)]
+
+  return [(1, combined)]
 
 
 def _extract_txt(file_bytes: bytes) -> list[tuple[int, str]]:
