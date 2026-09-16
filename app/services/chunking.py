@@ -62,12 +62,24 @@ def chunk_pages(pages:list[tuple[int,str]]) -> list[Chunk]:
         for match in _TABLE_PATTERN.finditer(text):
             # Plain text before this table -> normal recursive splitting.
             before = text[pos:match.start()]
+            before_stripped = before.strip()
+            # The line right above a table is usually its caption/heading
+            # (e.g. "Coverage Schedule"). Keep emitting it as its own chunk
+            # as before, but ALSO carry it into the table's chunk below —
+            # otherwise a query that names the table by its title matches
+            # only the caption chunk, and the table's own chunk (which is
+            # mostly numbers, no title text) never gets retrieved.
+            caption = before_stripped.splitlines()[-1].strip() if before_stripped else ""
+
             for piece in splitter.split_text(before):
                 _add(piece, page_number)
 
             # The table itself -> row-aware splitting with repeated header.
             table_md = match.group(1)
-            for piece in _chunk_table(table_md, settings.chunk_size):
+            table_pieces = _chunk_table(table_md, settings.chunk_size)
+            if caption and table_pieces:
+                table_pieces[0] = f"{caption}\n\n{table_pieces[0]}"
+            for piece in table_pieces:
                 _add(piece, page_number)
 
             pos = match.end()
