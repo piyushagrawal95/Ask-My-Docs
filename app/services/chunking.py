@@ -1,7 +1,6 @@
 import re
 from dataclasses import dataclass
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from app.config import settings
 from app.services.extraction import TABLE_START, TABLE_END
 
 @dataclass
@@ -13,6 +12,12 @@ class Chunk:
 _TABLE_PATTERN = re.compile(
     re.escape(TABLE_START) + r"(.*?)" + re.escape(TABLE_END), re.DOTALL
 )
+
+def _dynamic_chunk_params(total_chars:int) ->tuple[int,int]:
+    size=int(total_chars*0.04)
+    size=max(400,min(size,1600))
+    overlap=max(50,int(size*0.15))
+    return size,overlap
 
 
 def _chunk_table(table_md: str, max_size: int) -> list[str]:
@@ -41,9 +46,11 @@ def _chunk_table(table_md: str, max_size: int) -> list[str]:
 
 
 def chunk_pages(pages:list[tuple[int,str]]) -> list[Chunk]:
+    total_chars=sum(len(text) for _, text in pages)
+    chunk_size,chunk_overlap=_dynamic_chunk_params(total_chars)
     splitter=RecursiveCharacterTextSplitter(
-        chunk_size=settings.chunk_size,
-        chunk_overlap=settings.chunk_overlap,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
         separators=["\n\n","\n",". "," ",""]
     )
 
@@ -67,7 +74,7 @@ def chunk_pages(pages:list[tuple[int,str]]) -> list[Chunk]:
 
             # The table itself -> row-aware splitting with repeated header.
             table_md = match.group(1)
-            for piece in _chunk_table(table_md, settings.chunk_size):
+            for piece in _chunk_table(table_md, chunk_size):
                 _add(piece, page_number)
 
             pos = match.end()
