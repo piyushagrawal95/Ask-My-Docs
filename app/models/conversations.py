@@ -37,4 +37,5 @@ class ConversationDetailResponse(BaseModel):
 
 class AskQuestionRequest(BaseModel):
     question:str
+    document_id:str|None=None
     
