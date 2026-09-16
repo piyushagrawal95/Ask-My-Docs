@@ -64,10 +64,15 @@ def process_document(document_id:str, file_bytes:bytes, file_name:str) -> None:
 
         client.table("documents").update({"status":"ready","error_message":None}).eq("id",document_id).execute()
 
-    except(ExtractionError,ProcessingError) as e:
-        client.table("documents").update({"status":"failed","error_message":str(e)}).eq("id",document_id).execute()
+    except (ExtractionError, ProcessingError) as e:
+        client.table("documents").update({"status": "failed", "error_message": str(e)}).eq("id", document_id).execute()
 
     except Exception as e:
-        client.table("documents").update({"status":"failed","error_message":f"Unexpected error:{e}"}).eq("id",document_id).execute()
+        error_str = str(e)
+        if "1000 API calls / month" in error_str or "Trial key" in error_str or "TooManyRequestsError" in error_str or "429" in error_str:
+            clean_msg = "Cohere API limit reached (1000 calls/month quota on Trial key). Please update COHERE_API_KEY in .env / Render."
+        else:
+            clean_msg = f"Unexpected error: {e}"
+        client.table("documents").update({"status": "failed", "error_message": clean_msg}).eq("id", document_id).execute()
     finally:
         gc.collect()
