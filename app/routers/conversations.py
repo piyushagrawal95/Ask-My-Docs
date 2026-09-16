@@ -120,7 +120,7 @@ async def ask_question(
     _get_owned_conversation(client, conversation_id, user.id)  # 404s + ownership check
 
     # 1. Resolve which documents to search: only this conversation's ready documents
-    docs_resp=client.table("documents").select("id").eq("owner_id",user.id).eq("conversation_id",conversation_id).eq("status","ready")
+    docs_query=client.table("documents").select("id").eq("owner_id",user.id).eq("conversation_id",conversation_id).eq("status","ready")
     if body.document_id:
         docs_query=docs_query.eq("id",body.document_id)
     docs_resp=docs_query.execute()
