@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from app.auth import get_current_user, CurrentUser
 from app.database import get_service_client
+from app.config import settings
 from app.models.conversations import (
     AskQuestionRequest,
     ConversationDetailResponse,
@@ -8,7 +9,7 @@ from app.models.conversations import (
     ConversationResponse,
     MessageResponse,
 )
-from app.services.retrieval import retrieve, RetrievalError
+from app.services.retrieval import retrieve, RetrievalError, RetrievedChunk
 from app.services.generation import generate_answer
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
@@ -204,7 +205,34 @@ async def ask_question(
 
     # 3. Retrieve -> generate
     try:
-        chunks = retrieve(document_ids, body.question)
+        SUMMARIZE_ALL_TRIGGER = "please summarize all documents"
+        if body.question.strip().lower().rstrip(".") == SUMMARIZE_ALL_TRIGGER and len(document_ids) > 1:
+            # Fair per-document split: guarantee every document contributes
+            # chunks, instead of letting global similarity crowd one out.
+            per_doc_limit = max(2, settings.retrieval_top_k // len(document_ids))
+            chunks = []
+            for doc_id in document_ids:
+                resp = (
+                    client.table("document_chunks")
+                    .select("id, document_id, content, chunk_index, page_number")
+                    .eq("document_id", doc_id)
+                    .order("chunk_index")
+                    .limit(per_doc_limit)
+                    .execute()
+                )
+                chunks.extend([
+                    RetrievedChunk(
+                        id=row["id"],
+                        document_id=row["document_id"],
+                        content=row["content"],
+                        chunk_index=row["chunk_index"],
+                        page_number=row.get("page_number"),
+                        score=1.0,
+                    )
+                    for row in resp.data
+                ])
+        else:
+            chunks = retrieve(document_ids, body.question)
         result = generate_answer(body.question, chunks, history,document_list)
     except RetrievalError:
         assistant_row = (
