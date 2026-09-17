@@ -8,6 +8,7 @@ from app.models.conversations import (
     ConversationListResponse,
     ConversationResponse,
     MessageResponse,
+    RenameConversationRequest
 )
 from app.services.retrieval import retrieve, RetrievalError, RetrievedChunk
 from app.services.generation import generate_answer
@@ -20,6 +21,8 @@ def make_title_from_question(question:str,max_length:int =50) ->str:
     if(len(cleaned)<=max_length):
         return cleaned
     return cleaned[:max_length]+ "..."
+
+
 
 
 def _get_owned_conversation(client, conversation_id: str, user_id: str) -> dict:
@@ -68,6 +71,24 @@ async def get_conversation(conversation_id: str, user: CurrentUser = Depends(get
         .execute()
     )
     return {"conversation": conversation, "messages": messages_resp.data}
+
+
+@router.patch("/{conversation_id}",response_model=ConversationResponse)
+async def rename_conversation(
+    conversation_id:str,
+    body:RenameConversationRequest,
+    user:CurrentUser=Depends(get_current_user)
+):
+    client=get_service_client()
+    _get_owned_conversation(client,conversation_id,user.id)
+
+    title=body.title.strip()
+    if not title:
+        raise HTTPException(status_code=400,detail="Title cannot be empty.")
+    title=title[:50]
+
+    resp=(client.table("conversations").update({"title":title}).eq("id",conversation_id).execute())
+    return resp.data[0]
 
 @router.delete("/{conversation_id}", status_code=204)
 async def delete_conversation(conversation_id: str, user: CurrentUser = Depends(get_current_user)):
