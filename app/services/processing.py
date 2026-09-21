@@ -69,10 +69,10 @@ def process_document(document_id:str, file_bytes:bytes, file_name:str) -> None:
 
     except Exception as e:
         error_str = str(e)
-        if "429" in error_str or "rate limit" in error_str.lower():
-            clean_msg = "Voyage AI rate limit temporarily reached. Please retry in a few moments."
-        elif "quota" in error_str.lower() or "credit" in error_str.lower():
-            clean_msg = "Voyage AI quota reached. Please check your VOYAGE_API_KEY."
+        if "1000 API calls / month" in error_str or "quota" in error_str.lower():
+            clean_msg = "Cohere monthly quota reached (1000 calls/month). Please update COHERE_API_KEY."
+        elif "429" in error_str or "TooManyRequestsError" in error_str or "rate limit" in error_str.lower():
+            clean_msg = "Cohere rate limit reached (10 calls/minute). Please retry in a moment."
         else:
             clean_msg = f"Unexpected error: {e}"
         client.table("documents").update({"status": "failed", "error_message": clean_msg}).eq("id", document_id).execute()

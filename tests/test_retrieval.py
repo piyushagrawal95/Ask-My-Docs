@@ -21,18 +21,12 @@ def test_hybrid_search_ranks_chunk_found_by_both_retrievers_highest(mock_vector,
 
 
 @patch("app.services.embeddings._get_client")
-def test_rerank_calls_voyage_and_returns_scores(mock_get_client):
+def test_rerank_calls_cohere_and_returns_scores(mock_get_client):
     from app.services.embeddings import rerank
     mock_client = MagicMock()
-    mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.json.return_value = {
-        "data": [
-            {"index": 0, "relevance_score": 0.2},
-            {"index": 1, "relevance_score": 0.95},
-        ]
-    }
-    mock_client.post.return_value = mock_resp
+    mock_res1 = MagicMock(index=0, relevance_score=0.2)
+    mock_res2 = MagicMock(index=1, relevance_score=0.95)
+    mock_client.rerank.return_value = MagicMock(results=[mock_res1, mock_res2])
     mock_get_client.return_value = mock_client
 
     scores = rerank("ceo query", ["candidate 1", "candidate 2"])
