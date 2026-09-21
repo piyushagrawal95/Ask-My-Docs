@@ -39,7 +39,7 @@ create table if not exists document_chunks(
     content text not null,
     chunk_index int not null,
     page_number int,
-    embedding vector(384),
+    embedding vector(1024),
     content_tsv tsvector generated always as (to_tsvector('english',content)) stored,
     created_at timestamptz not null default now()
 );
@@ -113,7 +113,7 @@ create policy "citations via owned message" on citations
 -- 7. RPC: vector similarity search
 create or replace function match_document_chunks(
     p_document_ids uuid[],
-    p_query_embedding vector(384),
+    p_query_embedding vector(1024),
     p_match_count int
 )
 returns table (

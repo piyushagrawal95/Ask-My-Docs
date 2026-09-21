@@ -6,7 +6,8 @@ class Settings(BaseSettings):
     supabase_anon_key:str
 
     groq_api_key:str
-    cohere_api_key:str
+    voyage_api_key:str = ""
+    cohere_api_key:str = ""
 
     allowed_origins:str="http://localhost:5173"
 

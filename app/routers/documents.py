@@ -37,7 +37,8 @@ async def upload_document(
         client_for_check.table("documents").select("id",count="exact").eq("conversation_id",conversation_id).execute()
 
     )
-    if(existing_count_resp.count or 0)>=settings.max_documents_per_conversation:
+    current_count = existing_count_resp.count if isinstance(existing_count_resp.count, int) else 0
+    if current_count >= settings.max_documents_per_conversation:
         raise HTTPException(
             status_code=400,
             detail=f"This chat already has {settings.max_documents_per_conversation} documents - the maximum allowed"
