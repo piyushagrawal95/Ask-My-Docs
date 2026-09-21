@@ -33,6 +33,15 @@ async def upload_document(
 ):
     client_for_check = get_service_client()
     _get_owned_conversation_id(client_for_check, conversation_id, user.id)
+    existing_count_resp=(
+        client_for_check.table("documents").select("id",count="exact").eq("conversation_id",conversation_id).execute()
+
+    )
+    if(existing_count_resp.count or 0)>=settings.max_documents_per_conversation:
+        raise HTTPException(
+            status_code=400,
+            detail=f"This chat already has {settings.max_documents_per_conversation} documents - the maximum allowed"
+        )
 
     # 1. Extension check
     ext = file.filename.lower().rsplit(".", 1)[-1] if "." in file.filename else ""
