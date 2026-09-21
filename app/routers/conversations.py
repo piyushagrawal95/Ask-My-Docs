@@ -50,18 +50,29 @@ async def list_conversations(user: CurrentUser = Depends(get_current_user)):
     client = get_service_client()
     resp = (
         client.table("conversations")
-        .select("*")
+        .select("*, documents(id)")
         .eq("owner_id", user.id)
         .order("updated_at", desc=True)
         .execute()
     )
-    return {"conversations": resp.data}
+    conversations = []
+    for c in resp.data:
+        docs = c.pop("documents", [])
+        conversations.append({**c, "document_count": len(docs)})
+    return {"conversations": conversations}
 
 
 @router.get("/{conversation_id}", response_model=ConversationDetailResponse)
 async def get_conversation(conversation_id: str, user: CurrentUser = Depends(get_current_user)):
     client = get_service_client()
     conversation = _get_owned_conversation(client, conversation_id, user.id)
+
+    doc_count_resp = (
+        client.table("documents")
+        .select("id", count="exact")
+        .eq("conversation_id", conversation_id)
+        .execute()
+    )
 
     messages_resp = (
         client.table("messages")
@@ -70,25 +81,41 @@ async def get_conversation(conversation_id: str, user: CurrentUser = Depends(get
         .order("created_at")
         .execute()
     )
-    return {"conversation": conversation, "messages": messages_resp.data}
+    return {
+        "conversation": {**conversation, "document_count": doc_count_resp.count or 0},
+        "messages": messages_resp.data,
+    }
 
 
-@router.patch("/{conversation_id}",response_model=ConversationResponse)
+@router.patch("/{conversation_id}", response_model=ConversationResponse)
 async def rename_conversation(
-    conversation_id:str,
-    body:RenameConversationRequest,
-    user:CurrentUser=Depends(get_current_user)
+    conversation_id: str,
+    body: RenameConversationRequest,
+    user: CurrentUser = Depends(get_current_user)
 ):
-    client=get_service_client()
-    _get_owned_conversation(client,conversation_id,user.id)
+    client = get_service_client()
+    _get_owned_conversation(client, conversation_id, user.id)
 
-    title=body.title.strip()
+    # Cannot rename a chat with no documents uploaded
+    doc_count_resp = (
+        client.table("documents")
+        .select("id", count="exact")
+        .eq("conversation_id", conversation_id)
+        .execute()
+    )
+    if (doc_count_resp.count or 0) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot rename a chat with no documents uploaded."
+        )
+
+    title = body.title.strip()
     if not title:
-        raise HTTPException(status_code=400,detail="Title cannot be empty.")
-    title=title[:50]
+        raise HTTPException(status_code=400, detail="Title cannot be empty.")
+    title = title[:50]
 
-    resp=(client.table("conversations").update({"title":title}).eq("id",conversation_id).execute())
-    return resp.data[0]
+    resp = client.table("conversations").update({"title": title}).eq("id", conversation_id).execute()
+    return {**resp.data[0], "document_count": doc_count_resp.count or 0}
 
 @router.delete("/{conversation_id}", status_code=204)
 async def delete_conversation(conversation_id: str, user: CurrentUser = Depends(get_current_user)):
