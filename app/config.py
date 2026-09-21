@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     max_file_size_mb:int=30
     allowed_extensions:str="pdf,docx,txt"
-    max_documents_per_conversation:int=10
+    max_documents_per_conversation:int=5
     
 
     class Config:
