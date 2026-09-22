@@ -20,6 +20,10 @@ Rules:
 8. Respond with ONLY a JSON object, no other text , in this exact shape:
 {"answer":"<clean markdown-formatted answer text WITHOUT any [n], [excerpt n], or citation markers>","is_answerable":true/false,"cited_excerpts":[<excerpt numbers you actually used>]}
 9. If the user asks about a document's content - for example "what is this document about?","summarize this document" - answer using the numbered context excerpts as usual, like any other content question.
+10. If the user asks to compare, contrast, find differences, or analyze relationships between uploaded documents:
+- Use the document names attached to each excerpt (e.g. "(Document: file_name, page N)") to clearly distinguish which facts belong to which document.
+- Synthesize the provided excerpts to describe the topics, purpose, key points, differences, and similarities between the documents.
+- Always refer to each document by its file name and explain what each document is about or covers based on the context excerpts. Do not say "I don't have enough information to compare" if excerpts from the documents are available.
 """
 
 @dataclass
@@ -36,11 +40,16 @@ class GeneratedAnswer:
     citations:list[Citation]
 
 
-def _build_context_block(chunks:list[RetrievedChunk])->str:
+def _build_context_block(chunks:list[RetrievedChunk], doc_name_map: dict[str, str] | None = None)->str:
+    doc_name_map = doc_name_map or {}
     parts=[]
     for i, chunk in enumerate(chunks,start=1):
-        page_info=f"(page{chunk.page_number})" if chunk.page_number else ""
-        parts.append(f"[{i}]{page_info}:{chunk.content}")
+        doc_name = doc_name_map.get(chunk.document_id) or chunk.file_name or ""
+        doc_info = f"Document: {doc_name}" if doc_name else ""
+        page_info = f"page {chunk.page_number}" if chunk.page_number else ""
+        labels = ", ".join(filter(None, [doc_info, page_info]))
+        header = f"({labels})" if labels else ""
+        parts.append(f"[{i}]{header}: {chunk.content}")
     return "\n\n".join(parts)
 
 
@@ -54,7 +63,13 @@ def _build_document_list_block(document_list:list[dict]|None)->str:
     return "Uploaded documents in this conversation:\n" + "\n".join(lines)
 
 
-def generate_answer(query:str,chunks:list[RetrievedChunk],history:list[dict]|None=None,document_list:list[dict]|None=None) -> GeneratedAnswer:
+def generate_answer(
+    query:str,
+    chunks:list[RetrievedChunk],
+    history:list[dict]|None=None,
+    document_list:list[dict]|None=None,
+    doc_name_map:dict[str,str]|None=None
+) -> GeneratedAnswer:
     history = history or []
 
     if not chunks and not history and not document_list:
@@ -65,7 +80,7 @@ def generate_answer(query:str,chunks:list[RetrievedChunk],history:list[dict]|Non
         )
 
     context_block=(
-        _build_context_block(chunks)
+        _build_context_block(chunks, doc_name_map)
         if chunks
         else "(No new excerpts were retrieved for this message — rely on the conversation history and document list below.)"
     )

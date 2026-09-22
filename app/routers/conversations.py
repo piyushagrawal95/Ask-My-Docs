@@ -10,7 +10,13 @@ from app.models.conversations import (
     MessageResponse,
     RenameConversationRequest
 )
-from app.services.retrieval import retrieve, RetrievalError, RetrievedChunk
+from app.services.retrieval import (
+    retrieve,
+    RetrievalError,
+    RetrievedChunk,
+    is_comparison_or_multi_doc_query,
+    retrieve_multi_doc_balanced
+)
 from app.services.generation import generate_answer
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
@@ -182,6 +188,7 @@ async def ask_question(
         {"file_name": d["file_name"], "status": d["status"], "page_count": d.get("page_count")}
         for d in all_docs_resp.data
     ]
+    doc_name_map = {d["id"]: d["file_name"] for d in all_docs_resp.data}
 
     # If there are no documents in this conversation at all, skip the
     # retrieve/generate round-trip entirely and reply directly.
@@ -249,34 +256,26 @@ async def ask_question(
     # 3. Retrieve -> generate
     try:
         SUMMARIZE_ALL_TRIGGER = "please summarize all documents"
-        if body.question.strip().lower().rstrip(".") == SUMMARIZE_ALL_TRIGGER and len(document_ids) > 1:
-            # Fair per-document split: guarantee every document contributes
-            # chunks, instead of letting global similarity crowd one out.
-            per_doc_limit = max(2, settings.retrieval_top_k // len(document_ids))
-            chunks = []
-            for doc_id in document_ids:
-                resp = (
-                    client.table("document_chunks")
-                    .select("id, document_id, content, chunk_index, page_number")
-                    .eq("document_id", doc_id)
-                    .order("chunk_index")
-                    .limit(per_doc_limit)
-                    .execute()
-                )
-                chunks.extend([
-                    RetrievedChunk(
-                        id=row["id"],
-                        document_id=row["document_id"],
-                        content=row["content"],
-                        chunk_index=row["chunk_index"],
-                        page_number=row.get("page_number"),
-                        score=1.0,
-                    )
-                    for row in resp.data
-                ])
+        if (
+            body.question.strip().lower().rstrip(".") == SUMMARIZE_ALL_TRIGGER
+            or is_comparison_or_multi_doc_query(body.question)
+        ) and len(document_ids) > 1:
+            chunks = retrieve_multi_doc_balanced(document_ids, body.question)
         else:
             chunks = retrieve(document_ids, body.question)
-        result = generate_answer(body.question, chunks, history,document_list)
+
+        # Attach human-readable file name to each chunk
+        for c in chunks:
+            if not c.file_name and c.document_id in doc_name_map:
+                c.file_name = doc_name_map[c.document_id]
+
+        result = generate_answer(
+            body.question,
+            chunks,
+            history,
+            document_list,
+            doc_name_map=doc_name_map
+        )
     except RetrievalError:
         assistant_row = (
             client.table("messages")
