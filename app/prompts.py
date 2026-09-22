@@ -25,5 +25,4 @@ Rules:
 - Always refer to each document by its file name and explain what each document is about or covers based on the context excerpts. Do not say "I don't have enough information to compare" if excerpts from the documents are available.
 """
 
-# Alias for backwards compatibility
 SYSTEM_PROMPT = QA_SYSTEM_PROMPT
